@@ -24,7 +24,7 @@ public class BeforeMatchingStatistics {
         Properties properties = SiloUtil.siloInitialization(path);
         DataContainerWithSchools dataContainer = DataBuilder.getModelDataForMuc(properties, null);
         DataBuilder.read(properties, dataContainer);
-        TravelTimeUtil.updateCarSkim((SkimTravelTimes) dataContainer.getTravelTimes(), 2011, properties);
+        TravelTimeUtil.updateCarSkim((SkimTravelTimes) dataContainer.getTravelTimes(), 2011, properties, dataContainer.getGeoData().getZones().values());
 
 
         final Map<String, List<Person>> collect = dataContainer.getHouseholdDataManager().getPersons().stream().filter(p -> p.getJobId() > 0).collect(Collectors.groupingBy(p -> {

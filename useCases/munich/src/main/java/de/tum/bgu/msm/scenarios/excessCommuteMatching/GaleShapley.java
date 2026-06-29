@@ -49,7 +49,7 @@ public class GaleShapley {
         Properties properties = SiloUtil.siloInitialization(path);
         DataContainerWithSchools dataContainer = DataBuilder.getModelDataForMuc(properties, null);
         DataBuilder.read(properties, dataContainer);
-        TravelTimeUtil.updateCarSkim((SkimTravelTimes) dataContainer.getTravelTimes(), 2011, properties);
+        TravelTimeUtil.updateCarSkim((SkimTravelTimes) dataContainer.getTravelTimes(), 2011, properties, dataContainer.getGeoData().getZones().values());
 
         final Collection<Person> persons = dataContainer.getHouseholdDataManager().getPersons();
         final Map<String, List<Person>> personsByJobSector = persons.stream().filter(p -> p.getJobId() > 0)

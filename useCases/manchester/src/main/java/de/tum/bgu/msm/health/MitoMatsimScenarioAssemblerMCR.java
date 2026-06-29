@@ -144,7 +144,7 @@ public class MitoMatsimScenarioAssemblerMCR implements MatsimScenarioAssembler {
                 if(properties.transportModel.matsimInitialEventsFile == null) {
                     //read initial skim for the first year
                     logger.info("Reading car skim for initial Mito input");
-                    TravelTimeUtil.updateCarSkim(mitoInputTravelTime, properties.main.startYear, properties);
+                    TravelTimeUtil.updateCarSkim(mitoInputTravelTime, properties.main.startYear, properties, dataContainer.getGeoData().getZones().values());
                 } else {
                     //MATSim travel times are initialized from initial events file. Create skim from there.
                     mitoInputTravelTime.updateSkimMatrix(travelTimes.getPeakSkim(TransportMode.car), TransportMode.car);
