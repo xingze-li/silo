@@ -8,7 +8,6 @@ import de.tum.bgu.msm.data.dwelling.RealEstateDataManager;
 import de.tum.bgu.msm.data.household.Household;
 import de.tum.bgu.msm.data.household.HouseholdDataManager;
 import de.tum.bgu.msm.data.job.Job;
-import de.tum.bgu.msm.data.person.Gender;
 import de.tum.bgu.msm.data.person.Occupation;
 import de.tum.bgu.msm.data.person.Person;
 import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
@@ -56,22 +55,63 @@ public class AssignJobs {
         shuffleWorkers();
         logger.info("Number of workers " + workerArrayList.size());
         RealEstateDataManager realEstate = dataContainer.getRealEstateDataManager();
-        HouseholdDataManager households = dataContainer.getHouseholdDataManager();
-        for (Person pp : workerArrayList){
-            int selectedJobType = guessjobType(pp.getGender(), educationalLevel.get(pp));
+//        HouseholdDataManager households = dataContainer.getHouseholdDataManager();
+        int skippedNoJobType = 0;
+        int skippedUnsupportedJobType = 0;
+        int skippedNoSameTypeVacancy = 0;
+
+        for (Person pp : workerArrayList) {
+
+            String desiredJobType = getDesiredJobType(pp);
+
+            if (desiredJobType.isEmpty()) {
+                skippedNoJobType++;
+                continue;
+            }
+
+            Integer selectedJobTypeObject = jobIntTypes.get(desiredJobType);
+
+            if (selectedJobTypeObject == null) {
+                skippedUnsupportedJobType++;
+                continue;
+            }
+
+            int selectedJobType = selectedJobTypeObject;
+
             Household hh = pp.getHousehold();
             int origin = realEstate.getDwelling(hh.getDwellingId()).getZoneId();
+
             int[] workplace = selectWorkplace(origin, selectedJobType);
-            if (workplace[0] > 0) {
-                int jobID = idVacantJobsByZoneType.get(workplace[0])[numberVacantJobsByZoneByType.get(workplace[0]) - 1];
-                setWorkerAndJob(pp, jobID);
-                updateMaps(selectedJobType, workplace);
+
+            if (workplace[0] <= 0) {
+                skippedNoSameTypeVacancy++;
+                continue;
             }
-            if (LongMath.isPowerOfTwo(assignedJobs)){
+
+            Integer numberVacant = numberVacantJobsByZoneByType.get(workplace[0]);
+            int[] jobIds = idVacantJobsByZoneType.get(workplace[0]);
+
+            if (numberVacant == null || numberVacant <= 0 || jobIds == null) {
+                skippedNoSameTypeVacancy++;
+                continue;
+            }
+
+            int jobID = jobIds[numberVacant - 1];
+
+            setWorkerAndJob(pp, jobID);
+            updateMaps(selectedJobType, workplace);
+
+            assignedJobs++;
+
+            if (LongMath.isPowerOfTwo(assignedJobs)) {
                 logger.info("   Assigned " + assignedJobs + " jobs.");
             }
-            assignedJobs++;
         }
+
+        logger.info("   Finished job allocation. Assigned " + assignedJobs + " jobs.");
+        logger.info("   Skipped employed persons without valid jobType: " + skippedNoJobType);
+        logger.info("   Skipped employed persons with unsupported jobType: " + skippedUnsupportedJobType);
+        logger.info("   Skipped employed persons because no same-type vacancy exists: " + skippedNoSameTypeVacancy);
         logger.info("   Finished job allocation. Assigned " + assignedJobs + " jobs.");
     }
 
@@ -100,20 +140,69 @@ public class AssignJobs {
         pp.setWorkplace(jobID);
     }
 
+    private String getDesiredJobType(Person person) {
 
-    private int[] selectWorkplace(int homeTaz, int selectedJobType){
+        return person.getAttribute("jobType")
+                .map(Object::toString)
+                .orElse("")
+                .trim();
+    }
+
+
+    private int[] selectWorkplace(int homeTaz, int selectedJobType) {
 
         int[] workplace = new int[2];
-        if (numberZonesByType.get(selectedJobType) > 0) {
-            double[] probs = new double[numberZonesByType.get(selectedJobType)];
-            int[] ids = idZonesVacantJobsByType.get(selectedJobType);
-            RowVector distances = distanceImpedance.getRow(homeTaz);
-            IntStream.range(0, probs.length).parallel().forEach(id -> probs[id] = Math.exp(distances.getValueAt(ids[id] / 100) * Math.pow(numberVacantJobsByZoneByType.get(ids[id]), 0.45)));
-            workplace = select(probs, ids);
-        } else {
-            workplace[0] = -2;
+        workplace[0] = -2;
+        workplace[1] = -1;
+
+        Integer numberOfZonesObject = numberZonesByType.get(selectedJobType);
+
+        if (numberOfZonesObject == null || numberOfZonesObject <= 0) {
+            return workplace;
         }
-        return workplace;
+
+        int numberOfZones = numberOfZonesObject;
+
+        int[] ids = idZonesVacantJobsByType.get(selectedJobType);
+
+        if (ids == null || ids.length == 0) {
+            return workplace;
+        }
+
+        double[] probs = new double[numberOfZones];
+
+        RowVector distances = distanceImpedance.getRow(homeTaz);
+
+        IntStream.range(0, probs.length).parallel().forEach(index -> {
+
+            int zoneType = ids[index];
+
+            Integer numberVacant = numberVacantJobsByZoneByType.get(zoneType);
+
+            if (numberVacant == null || numberVacant <= 0) {
+                probs[index] = 0;
+                return;
+            }
+
+            int destinationTaz = zoneType / 100;
+
+            double distanceWeight = distances.getValueAt(destinationTaz);
+
+            if (Double.isNaN(distanceWeight) || Double.isInfinite(distanceWeight) || distanceWeight < 0) {
+                probs[index] = 0;
+                return;
+            }
+
+            probs[index] = distanceWeight * Math.pow(numberVacant, 0.45);
+        });
+
+        double sumProbability = Arrays.stream(probs).sum();
+
+        if (sumProbability <= 0) {
+            return workplace;
+        }
+
+        return select(probs, ids);
     }
 
 
@@ -135,13 +224,25 @@ public class AssignJobs {
     private void identifyVacantJobsByZoneType() {
 
         logger.info("  Identifying vacant jobs by zone");
+
         Collection<Job> jobs = dataContainer.getJobDataManager().getJobs();
 
-        jobStringTypes = PropertiesSynPop.get().main.jobStringType;
+        /*
+         * Use one consistent, trimmed job type array everywhere.
+         * Expected:
+         * Agri, Manu, Retail, Business, Serv
+         */
+        jobStringTypes = Arrays.stream(PropertiesSynPop.get().main.jobStringType)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toArray(String[]::new);
+
         jobIntTypes = new HashMap<>();
-        for (int i = 0; i < PropertiesSynPop.get().main.jobStringType.length; i++) {
-            jobIntTypes.put(PropertiesSynPop.get().main.jobStringType[i], i);
+
+        for (int i = 0; i < jobStringTypes.length; i++) {
+            jobIntTypes.put(jobStringTypes[i], i);
         }
+
         tazIds = dataSetSynPop.getTazs().stream().mapToInt(i -> i).toArray();
 
         idVacantJobsByZoneType = new HashMap<>();
@@ -149,151 +250,172 @@ public class AssignJobs {
         idZonesVacantJobsByType = new HashMap<>();
         numberZonesByType = new HashMap<>();
         numberVacantJobsByZoneByType = new HashMap<>();
-        jobIntTypes = new HashMap<>();
-        for (int i = 0; i < PropertiesSynPop.get().main.jobStringType.length; i++) {
-            jobIntTypes.put(PropertiesSynPop.get().main.jobStringType[i], i);
-        }
+
         int[] cellsID = PropertiesSynPop.get().main.cellsMatrix.getColumnAsInt("ID_cell");
 
-        //create the counter hashmaps
-        for (int i = 0; i < PropertiesSynPop.get().main.jobStringType.length; i++){
-            int type = jobIntTypes.get(PropertiesSynPop.get().main.jobStringType[i]);
-            numberZonesByType.put(type,0);
-            numberVacantJobsByType.put(type,0);
-            for (int j = 0; j < cellsID.length; j++){
-                numberVacantJobsByZoneByType.put(type + cellsID[j] * 100, 0);
-            }
-        }
-        //get the totals
-        int count = 0;
-        for (Job jj: jobs) {
-            //set all jobs vacant to allocate them
-            jj.setWorkerID(-1);
-            int type = jobIntTypes.get(jj.getType());
-            int typeZone = type + jj.getZoneId() * 100;
-            //update the set of zones that have ID
-            if (numberVacantJobsByZoneByType.get(typeZone) == 0){
-                numberZonesByType.put(type, numberZonesByType.get(type) + 1);
-            }
-            //update the number of vacant jobs per job type
-            numberVacantJobsByType.put(type, numberVacantJobsByType.get(type) + 1);
-            numberVacantJobsByZoneByType.put(typeZone, numberVacantJobsByZoneByType.get(typeZone) + 1);
-            count++;
+        /*
+         * Initialize all counters.
+         * typeZone key = type + zoneId * 100
+         */
+        for (String jobType : jobStringTypes) {
 
-        }
-        logger.info("Number of vacant jobs " + count);
-
-        //create the IDs Hashmaps and reset the counters
-        for (String jobType : PropertiesSynPop.get().main.jobStringType){
             int type = jobIntTypes.get(jobType);
-            int[] dummy = SiloUtil.createArrayWithValue(numberZonesByType.get(type),0);
-            idZonesVacantJobsByType.put(type,dummy);
-            numberZonesByType.put(type,0);
-            for (int j = 0; j < cellsID.length; j++){
-                int typeZone = type + cellsID[j] * 100;
-                int[] dummy2 = SiloUtil.createArrayWithValue(numberVacantJobsByZoneByType.get(typeZone), 0);
-                idVacantJobsByZoneType.put(typeZone, dummy2);
+
+            numberZonesByType.put(type, 0);
+            numberVacantJobsByType.put(type, 0);
+
+            for (int cellId : cellsID) {
+                int typeZone = type + cellId * 100;
                 numberVacantJobsByZoneByType.put(typeZone, 0);
             }
         }
-        //fill the Hashmaps with IDs
-        for (Job jj: jobs) {
-            //all jobs are vacant in this step of the synthetic population
-            int type = jobIntTypes.get(jj.getType());
-            int typeZone = jobIntTypes.get(jj.getType()) + jj.getZoneId() * 100;
-            //update the list of job IDs per zone and job type
-            int [] previousJobIDs = idVacantJobsByZoneType.get(typeZone);
-            previousJobIDs[numberVacantJobsByZoneByType.get(typeZone)] = jj.getId();
-            idVacantJobsByZoneType.put(typeZone,previousJobIDs);
-            //update the set of zones that have ID
-            if (numberVacantJobsByZoneByType.get(typeZone) == 0){
-                int[] previousZones = idZonesVacantJobsByType.get(type);
-                previousZones[numberZonesByType.get(type)] = typeZone;
-                idZonesVacantJobsByType.put(type,previousZones);
+
+        /*
+         * First pass:
+         * count vacant jobs by type and by zone/type.
+         */
+        int count = 0;
+
+        for (Job jj : jobs) {
+
+            jj.setWorkerID(-1);
+
+            String jobType = jj.getType().trim();
+            Integer typeObject = jobIntTypes.get(jobType);
+
+            if (typeObject == null) {
+                throw new RuntimeException(
+                        "Unknown job type in generated jobs: '" + jobType + "'. " +
+                                "Valid job types are: " + Arrays.toString(jobStringTypes)
+                );
+            }
+
+            int type = typeObject;
+            int typeZone = type + jj.getZoneId() * 100;
+
+            if (!numberVacantJobsByZoneByType.containsKey(typeZone)) {
+                throw new RuntimeException(
+                        "Job " + jj.getId() + " has zone " + jj.getZoneId() +
+                                ", but this zone is not found in cellsMatrix ID_cell."
+                );
+            }
+
+            if (numberVacantJobsByZoneByType.get(typeZone) == 0) {
                 numberZonesByType.put(type, numberZonesByType.get(type) + 1);
             }
-            //update the number of vacant jobs per job type
-            numberVacantJobsByZoneByType.put(typeZone, numberVacantJobsByZoneByType.get(typeZone) + 1);
 
+            numberVacantJobsByType.put(type, numberVacantJobsByType.get(type) + 1);
+            numberVacantJobsByZoneByType.put(
+                    typeZone,
+                    numberVacantJobsByZoneByType.get(typeZone) + 1
+            );
+
+            count++;
+        }
+
+        logger.info("Number of vacant jobs " + count);
+
+        /*
+         * Create arrays and reset zone/type counters.
+         */
+        for (String jobType : jobStringTypes) {
+
+            int type = jobIntTypes.get(jobType);
+
+            int[] zoneArray = SiloUtil.createArrayWithValue(
+                    numberZonesByType.get(type),
+                    0
+            );
+
+            idZonesVacantJobsByType.put(type, zoneArray);
+            numberZonesByType.put(type, 0);
+
+            for (int cellId : cellsID) {
+
+                int typeZone = type + cellId * 100;
+
+                int[] jobIdArray = SiloUtil.createArrayWithValue(
+                        numberVacantJobsByZoneByType.get(typeZone),
+                        0
+                );
+
+                idVacantJobsByZoneType.put(typeZone, jobIdArray);
+                numberVacantJobsByZoneByType.put(typeZone, 0);
+            }
+        }
+
+        /*
+         * Second pass:
+         * fill arrays with job IDs and active zone/type IDs.
+         */
+        for (Job jj : jobs) {
+
+            String jobType = jj.getType().trim();
+            int type = jobIntTypes.get(jobType);
+            int typeZone = type + jj.getZoneId() * 100;
+
+            int[] jobIds = idVacantJobsByZoneType.get(typeZone);
+
+            if (jobIds == null) {
+                throw new RuntimeException(
+                        "No job ID array found for typeZone " + typeZone +
+                                ", job type " + jobType +
+                                ", zone " + jj.getZoneId()
+                );
+            }
+
+            int currentCount = numberVacantJobsByZoneByType.get(typeZone);
+
+            jobIds[currentCount] = jj.getId();
+
+            if (currentCount == 0) {
+
+                int[] activeZones = idZonesVacantJobsByType.get(type);
+                int currentZoneCount = numberZonesByType.get(type);
+
+                activeZones[currentZoneCount] = typeZone;
+
+                numberZonesByType.put(type, currentZoneCount + 1);
+            }
+
+            numberVacantJobsByZoneByType.put(typeZone, currentCount + 1);
         }
     }
 
 
-    private void updateMaps(int selectedJobType, int[] zoneType){
+    private void updateMaps(int selectedJobType, int[] zoneType) {
 
-       numberVacantJobsByZoneByType.put(zoneType[0], numberVacantJobsByZoneByType.get(zoneType[0]) - 1);
-        numberVacantJobsByType.put(selectedJobType, numberVacantJobsByType.get(selectedJobType) - 1);
-        if (numberVacantJobsByZoneByType.get(zoneType[0]) < 1) {
-            idZonesVacantJobsByType.get(selectedJobType)[zoneType[1]] = idZonesVacantJobsByType.get(selectedJobType)[numberZonesByType.get(selectedJobType) - 1];
-            idZonesVacantJobsByType.put(selectedJobType, idZonesVacantJobsByType.get(selectedJobType));
-            numberZonesByType.put(selectedJobType, numberZonesByType.get(selectedJobType) - 1);
-            if (numberZonesByType.get(selectedJobType) < 1) {
-                int w = 0;
-                while (w < PropertiesSynPop.get().main.jobStringType.length & selectedJobType > jobIntTypes.get(jobStringTypes[w])) {
-                    w++;
-                }
-                jobIntTypes.remove(jobStringTypes[w]);
-                jobStringTypes[w] = jobStringTypes[jobStringTypes.length - 1];
-                jobStringTypes = SiloUtil.removeOneElementFromZeroBasedArray(jobStringTypes, jobStringTypes.length - 1);
+        int typeZone = zoneType[0];
+        int zoneArrayPosition = zoneType[1];
+
+        int remainingJobsInZoneType =
+                numberVacantJobsByZoneByType.get(typeZone) - 1;
+
+        numberVacantJobsByZoneByType.put(
+                typeZone,
+                remainingJobsInZoneType
+        );
+
+        numberVacantJobsByType.put(
+                selectedJobType,
+                numberVacantJobsByType.get(selectedJobType) - 1
+        );
+
+        if (remainingJobsInZoneType < 1) {
+
+            int currentNumberZones = numberZonesByType.get(selectedJobType);
+            int lastIndex = currentNumberZones - 1;
+
+            if (zoneArrayPosition != lastIndex) {
+                idZonesVacantJobsByType.get(selectedJobType)[zoneArrayPosition] =
+                        idZonesVacantJobsByType.get(selectedJobType)[lastIndex];
             }
-        }
-    }
 
-
-    public int guessjobType(Gender gender, int educationLevel){
-        int jobType = 0;
-        float[] cumProbability;
-        switch (gender){
-            case MALE:
-                switch (educationLevel) {
-                    case 0:
-                        cumProbability = new float[]{0.01853f,0.265805f,0.279451f,0.382040f,0.591423f,0.703214f,0.718372f,0.792528f,0.8353f,1.0f};
-                        break;
-                    case 1:
-                        cumProbability = new float[]{0.01853f,0.265805f,0.279451f,0.382040f,0.591423f,0.703214f,0.718372f,0.792528f,0.8353f,1.0f};
-                        break;
-                    case 2:
-                        cumProbability = new float[]{0.025005f,0.331942f,0.355182f,0.486795f,0.647928f,0.0748512f,0.779124f,0.838452f,0.900569f,1f};
-                        break;
-                    case 3:
-                        cumProbability = new float[]{0.008533f,0.257497f,0.278324f,0.323668f,0.39151f,0.503092f,0.55153f,0.588502f,0.795734f,1f};
-                        break;
-                    case 4:
-                        cumProbability = new float[]{0.004153f,0.154197f,0.16906f,0.19304f,0.246807f,0.347424f,0.387465f,0.418509f,0.4888415f,1f};
-                        break;
-                    default: cumProbability = new float[]{0.025005f,0.331942f,0.355182f,0.486795f,0.647928f,0.0748512f,0.779124f,0.838452f,0.900569f,1f};
-                }
-                break;
-            case FEMALE:
-                switch (educationLevel) {
-                    case 0:
-                        cumProbability = new float[]{0.012755f,0.153795f,0.159108f,0.174501f,0.448059f,0.49758f,0.517082f,0.616346f,0.655318f,1f};
-                        break;
-                    case 1:
-                        cumProbability = new float[]{0.012755f,0.153795f,0.159108f,0.174501f,0.448059f,0.49758f,0.517082f,0.616346f,0.655318f,1f};
-                        break;
-                    case 2:
-                        cumProbability = new float[]{0.013754f,0.137855f,0.145129f,0.166915f,0.389282f,0.436095f,0.479727f,0.537868f,0.603158f,1f};
-                        break;
-                    case 3:
-                        cumProbability = new float[]{0.005341f,0.098198f,0.109149f,0.125893f,0.203838f,0.261698f,0.314764f,0.366875f,0.611298f,1f};
-                        break;
-                    case 4:
-                        cumProbability = new float[]{0.002848f,0.061701f,0.069044f,0.076051f,0.142332f,0.197382f,0.223946f,0.253676f,0.327454f,1f};
-                        break;
-                    default: cumProbability = new float[]{0.013754f,0.137855f,0.145129f,0.166915f,0.389282f,0.436095f,0.479727f,0.537868f,0.603158f,1f};
-                }
-                break;
-            default: cumProbability = new float[]{0.025005f,0.331942f,0.355182f,0.486795f,0.647928f,0.0748512f,0.779124f,0.838452f,0.900569f,1f};
+            numberZonesByType.put(
+                    selectedJobType,
+                    currentNumberZones - 1
+            );
         }
-        float threshold = SiloUtil.getRandomNumberAsFloat();
-        for (int i = 0; i < cumProbability.length; i++) {
-            if (cumProbability[i] > threshold) {
-                return i;
-            }
-        }
-        return cumProbability.length - 1;
-
     }
 
 

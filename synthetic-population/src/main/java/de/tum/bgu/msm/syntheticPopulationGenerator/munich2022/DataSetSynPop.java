@@ -6,7 +6,6 @@ import com.google.common.collect.Table;
 import de.tum.bgu.msm.common.datafile.TableDataSet;
 import de.tum.bgu.msm.common.matrix.Matrix;
 import de.tum.bgu.msm.data.MunichDwellingTypes;
-import de.tum.bgu.msm.data.dwelling.DwellingType;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

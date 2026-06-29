@@ -29,7 +29,7 @@ public class Microlocation extends ModuleSynPop {
         String zoneShapeFile = Properties.get().geo.zoneShapeFile;
         Map<Integer, SimpleFeature> zoneFeatureMap = new HashMap<>();
         for (SimpleFeature feature: ShapeFileReader.getAllFeatures(zoneShapeFile)) {
-            int zoneId = Integer.parseInt(feature.getAttribute("id").toString());
+            int zoneId = Integer.parseInt(feature.getAttribute("TAZ_ID").toString());
             zoneFeatureMap.put(zoneId,feature);
         }
         dataSetSynPop.setZoneFeatureMap(zoneFeatureMap);

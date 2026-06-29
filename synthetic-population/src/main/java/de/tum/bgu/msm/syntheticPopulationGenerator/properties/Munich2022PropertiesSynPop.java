@@ -47,7 +47,7 @@ public class Munich2022PropertiesSynPop extends AbstractPropertiesSynPop {
         selectedMunicipalities = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle,"municipalities.list","input/syntheticPopulation/input2022_new/municipalitiesList.csv"));
         selectedMunicipalities.buildIndex(selectedMunicipalities.getColumnPosition("ID_city"));
 
-        cellsMatrix = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle,"taz.definition ","input/syntheticPopulation/input2022/zoneAttributes2022.csv"));
+        cellsMatrix = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle,"taz.definition ","input/syntheticPopulation/input2022/zoneAttributes_2022_5types_with_capacity.csv"));
         cellsMatrix.buildIndex(cellsMatrix.getColumnPosition("ID_cell"));
 
         //todo this cannot be the final name of the matrix

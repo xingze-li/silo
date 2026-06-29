@@ -68,7 +68,7 @@ public class SyntheticPopDe implements SyntheticPopI {
         logger.info("Running Module: Car ownership");
         //new CreateCarOwnershipModelMuc(dataContainer).run();
 
-//        logger.info("Running Module: Disability");
+        logger.info("Running Module: Disability");
 //        new DisabilityBase(dataSetSynPop, dataContainer).run();
 
         logger.info("Summary of the synthetic population");

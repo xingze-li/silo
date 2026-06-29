@@ -1,8 +1,9 @@
 package de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.preparation;
 
 
-import de.tum.bgu.msm.data.dwelling.DefaultDwellingTypes;
-import de.tum.bgu.msm.data.dwelling.DwellingType;
+//import de.tum.bgu.msm.data.dwelling.DefaultDwellingTypes;
+//import de.tum.bgu.msm.data.dwelling.DwellingType;
+import de.tum.bgu.msm.data.MunichDwellingTypes.DwellingTypeMunich;
 import de.tum.bgu.msm.data.dwelling.DwellingUsage;
 import de.tum.bgu.msm.data.person.Gender;
 import de.tum.bgu.msm.data.person.Nationality;
@@ -39,6 +40,16 @@ public class MicroDataManager {
         attributesMicroData.put("dwelling", attributesDwelling);
         return attributesMicroData;
     }
+
+    public DwellingTypeMunich translateDwellingType(int dwellingTypeCode) {
+
+        try {
+            return DwellingTypeMunich.valueOf(dwellingTypeCode);
+        } catch (IllegalArgumentException e) {
+            return DwellingTypeMunich.MFH;
+        }
+    }
+
 
 
     public Map<String, String> attributesPersonMicroData(){
@@ -433,12 +444,16 @@ public class MicroDataManager {
         if ((heatingDistrict != 1) & (heatingCentral != 1)) quality--; //reduce quality if not central or district heating
         if ((heatingEnergy > 4)|(heatingEnergy < 0)) quality--; //reduce quality if energy is not gas, electricity or heating oil (i.e. coal, wood, biomass, solar energy)
         if (additionalHeating >= 2) quality++; //increase quality if there is additional heating in the house (regardless the used energy)
-        if (yearBuilt > 0){
-            //Ages - 1: before 1919, 2: 1919-1948, 3: 1949-1978, 4: 1979 - 1990; 5: 1991 - 2000; 6: 2001 - 2010; 7: 2011 - 2019, 10: 2020 or later,
-            float[] deteriorationProbability = {0.9f, 0.8f, 0.6f, 0.3f, 0.12f, 0.08f, 0.05f, 0.04f, 0.04f};
-            float prob = deteriorationProbability[yearBuilt - 1];
-            //attempt to drop quality by age two times (to get some spreading of quality levels)
-            quality = quality - SiloUtil.select(new double[]{1 - prob ,prob});
+        if (yearBuilt > 0) {
+            float[] deteriorationProbability = {
+                    0.9f, 0.8f, 0.6f, 0.3f, 0.12f,
+                    0.08f, 0.05f, 0.04f, 0.04f
+            };
+
+            int index = Math.max(0, Math.min(yearBuilt - 1, deteriorationProbability.length - 1));
+            float prob = deteriorationProbability[index];
+
+            quality = quality - SiloUtil.select(new double[]{1 - prob, prob});
             quality = quality - SiloUtil.select(new double[]{1 - prob, prob});
         }
         quality = Math.max(quality, 1);      // ensure that quality never drops below 1
@@ -463,33 +478,42 @@ public class MicroDataManager {
 //    }
 
 
-//    public int guessBedrooms (int floorSpace){
-//        int bedrooms = 0;
-//        if (floorSpace < 40){
-//            bedrooms = 0;
-//        } else if (floorSpace < 60){
-//            bedrooms = 1;
-//        } else if (floorSpace < 80){
-//            bedrooms = 2;
-//        } else if (floorSpace < 100){
-//            bedrooms = 3;
-//        } else if (floorSpace < 120){
-//            bedrooms = 4;
-//        } else {
-//            bedrooms = 5;
-//        }
-//        return bedrooms;
-//    }
+    public int guessBedrooms (int floorSpace){
+        int bedrooms = 0;
+        if (floorSpace < 40){
+            bedrooms = 0;
+        } else if (floorSpace < 60){
+            bedrooms = 1;
+        } else if (floorSpace < 80){
+            bedrooms = 2;
+        } else if (floorSpace < 100){
+            bedrooms = 3;
+        } else if (floorSpace < 120){
+            bedrooms = 4;
+        } else {
+            bedrooms = 5;
+        }
+        return bedrooms;
+    }
 
-//    public DwellingUsage translateDwellingUsage(int use){
-//        DwellingUsage usage = DwellingUsage.OWNED;
-//        if ((use == 3)|(use == 4)){
-//            usage = DwellingUsage.RENTED;
-//        } else if (use == 5){
-//            usage = DwellingUsage.VACANT;
-//        }
-//        return usage;
-//    }
+    public int guessBedroomsFromRoomsOrSpace(int numberOfRooms, int floorSpace) {
+
+        if (numberOfRooms > 0) {
+            return Math.max(0, Math.min(numberOfRooms, 5) - 1);
+        }
+
+        return guessBedrooms(floorSpace);
+    }
+
+    public DwellingUsage translateDwellingUsage(int use){
+        DwellingUsage usage = DwellingUsage.OWNED;
+        if ((use == 3)|(use == 4)){
+            usage = DwellingUsage.RENTED;
+        } else if (use == 5){
+            usage = DwellingUsage.VACANT;
+        }
+        return usage;
+    }
 
     public int guessPrice(float brw, int quality, int size, DwellingUsage use) {
 
@@ -518,6 +542,25 @@ public class MicroDataManager {
         return (int) price;
     }
 
+    public int getObservedOrEstimatedMonthlyCost(
+            int totalRent,
+            float rentPerSqm,
+            int groundPrice,
+            int quality,
+            int floorSpace,
+            DwellingUsage usage
+    ) {
+
+        if (totalRent > 0) {
+            return totalRent;
+        }
+
+        if (rentPerSqm > 0 && floorSpace > 0) {
+            return Math.round(rentPerSqm * floorSpace + 150);
+        }
+
+        return guessPrice(groundPrice, quality, floorSpace, usage);
+    }
 
 //    public int guessFloorSpace(int floorSpace){
 //        //provide the size of the building
@@ -564,60 +607,6 @@ public class MicroDataManager {
         }
         return yearBracket;
     }
-    public int guessjobType(int gender, int educationLevel){
-        int jobType = 0;
-        float[] cumProbability;
-        switch (gender){
-            case 1:
-                switch (educationLevel) {
-                    case 0:
-                        cumProbability = new float[]{0.01853f,0.265805f,0.279451f,0.382040f,0.591423f,0.703214f,0.718372f,0.792528f,0.8353f,1.0f};
-                        break;
-                    case 1:
-                        cumProbability = new float[]{0.01853f,0.265805f,0.279451f,0.382040f,0.591423f,0.703214f,0.718372f,0.792528f,0.8353f,1.0f};
-                        break;
-                    case 2:
-                        cumProbability = new float[]{0.025005f,0.331942f,0.355182f,0.486795f,0.647928f,0.0748512f,0.779124f,0.838452f,0.900569f,1f};
-                        break;
-                    case 3:
-                        cumProbability = new float[]{0.008533f,0.257497f,0.278324f,0.323668f,0.39151f,0.503092f,0.55153f,0.588502f,0.795734f,1f};
-                        break;
-                    case 4:
-                        cumProbability = new float[]{0.004153f,0.154197f,0.16906f,0.19304f,0.246807f,0.347424f,0.387465f,0.418509f,0.4888415f,1f};
-                        break;
-                    default: cumProbability = new float[]{0.025005f,0.331942f,0.355182f,0.486795f,0.647928f,0.0748512f,0.779124f,0.838452f,0.900569f,1f};
-                }
-                break;
-            case 2:
-                switch (educationLevel) {
-                    case 0:
-                        cumProbability = new float[]{0.012755f,0.153795f,0.159108f,0.174501f,0.448059f,0.49758f,0.517082f,0.616346f,0.655318f,1f};
-                        break;
-                    case 1:
-                        cumProbability = new float[]{0.012755f,0.153795f,0.159108f,0.174501f,0.448059f,0.49758f,0.517082f,0.616346f,0.655318f,1f};
-                        break;
-                    case 2:
-                        cumProbability = new float[]{0.013754f,0.137855f,0.145129f,0.166915f,0.389282f,0.436095f,0.479727f,0.537868f,0.603158f,1f};
-                        break;
-                    case 3:
-                        cumProbability = new float[]{0.005341f,0.098198f,0.109149f,0.125893f,0.203838f,0.261698f,0.314764f,0.366875f,0.611298f,1f};
-                        break;
-                    case 4:
-                        cumProbability = new float[]{0.002848f,0.061701f,0.069044f,0.076051f,0.142332f,0.197382f,0.223946f,0.253676f,0.327454f,1f};
-                        break;
-                    default: cumProbability = new float[]{0.013754f,0.137855f,0.145129f,0.166915f,0.389282f,0.436095f,0.479727f,0.537868f,0.603158f,1f};
-                }
-                break;
-                default: cumProbability = new float[]{0.025005f,0.331942f,0.355182f,0.486795f,0.647928f,0.0748512f,0.779124f,0.838452f,0.900569f,1f};
-        }
-        float threshold = SiloUtil.getRandomNumberAsFloat();
-        for (int i = 0; i < cumProbability.length; i++) {
-            if (cumProbability[i] > threshold) {
-                return i;
-            }
-        }
-        return cumProbability.length - 1;
-    }
 
     public int dwellingYearfromBracket(int yearBracket) {
 
@@ -635,5 +624,46 @@ public class MicroDataManager {
         }
 
         return year;
+    }
+
+    public String translateJobType(int wz08Code) {
+
+        if (wz08Code <= 0) {
+            return "";
+        }
+
+        /*
+         * WZ08 section mapping:
+         * A       011-032      -> Agri
+         * B-F     051-439      -> Manu
+         * G-I     451-563      -> Retail
+         * J-N     581-829      -> Business
+         * O-U     841-990      -> Serv
+         * In the microdata, leading zeros are usually lost:
+         * 011 becomes 11.
+         */
+
+        if (wz08Code >= 11 && wz08Code <= 32) {
+            return "Agri";
+        }
+
+        if ((wz08Code >= 51 && wz08Code <= 99)
+                || (wz08Code >= 101 && wz08Code <= 439)) {
+            return "Manu";
+        }
+
+        if (wz08Code >= 451 && wz08Code <= 563) {
+            return "Retail";
+        }
+
+        if (wz08Code >= 581 && wz08Code <= 829) {
+            return "Business";
+        }
+
+        if (wz08Code >= 841 && wz08Code <= 990) {
+            return "Serv";
+        }
+
+        return "";
     }
 }

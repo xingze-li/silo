@@ -64,8 +64,8 @@ public class PersonWriterMucDisability implements PersonWriter {
             pwp.print(",");
             pwp.print("0");
             pwp.print(",");
-//            pwp.print(pp.getAttribute("disability").get().toString());
-//            pwp.print(",");
+            pwp.print(pp.getAttribute("disability").get().toString());
+            pwp.print(",");
             pwp.print("0");
             pwp.print(",");
             pwp.print(pp.getAttribute("jobDurationType").get().toString());
