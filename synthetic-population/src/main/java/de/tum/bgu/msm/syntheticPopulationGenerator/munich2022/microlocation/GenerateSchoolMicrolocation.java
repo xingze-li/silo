@@ -25,6 +25,7 @@ public class GenerateSchoolMicrolocation {
     private final DataContainerWithSchools dataContainer;
     private final DataSetSynPop dataSetSynPop;
     Map<Integer, Map<Integer,Map<Integer,Integer>>> zoneSchoolTypeSchoolLocationCapacity = new HashMap<>();
+    private final Map<Integer, Integer> municipalityByZone = new HashMap<>();
 
 
     public GenerateSchoolMicrolocation(DataContainerWithSchools dataContainer, DataSetSynPop dataSetSynPop){
@@ -32,9 +33,30 @@ public class GenerateSchoolMicrolocation {
         this.dataContainer = dataContainer;
     }
 
+    private void initializeMunicipalityLookup() {
+
+        for (int row = 1; row <= PropertiesSynPop.get().main.cellsMatrix.getRowCount(); row++) {
+
+            int zone = Math.round(
+                    PropertiesSynPop.get().main.cellsMatrix.getValueAt(row, "ID_cell")
+            );
+
+            int municipality = Math.round(
+                    PropertiesSynPop.get().main.cellsMatrix.getValueAt(row, "ID_city")
+            );
+
+            municipalityByZone.put(zone, municipality);
+        }
+    }
+
+    private int getMunicipalityByZone(int zoneId) {
+        return municipalityByZone.getOrDefault(zoneId, -1);
+    }
+
     public void run() {
         logger.info("   Running module: school microlocation");
         logger.info("   Start creating school objects from school location list");
+        initializeMunicipalityLookup();
         createSchools();
         logger.info("   Start Selecting the school to allocate the student");
         //Select the school to allocate the student
@@ -44,7 +66,6 @@ public class GenerateSchoolMicrolocation {
             if (pp.getOccupation() == Occupation.STUDENT) {
                 int zoneID = pp.getSchoolPlace();
                 int schoolType = pp.getSchoolType();
-                Zone zone = dataContainer.getGeoData().getZones().get(zoneID);
 
                 if (zoneSchoolTypeSchoolLocationCapacity.get(zoneID) == null ||
                         zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType) == null ||
@@ -96,6 +117,7 @@ public class GenerateSchoolMicrolocation {
 
             int id = (int) PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"OBJECTID");
             int zone = (int) PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"zoneID");
+            int municipality = getMunicipalityByZone(zone);
             float xCoordinate = PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"x");
             float yCoordinate = PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"y");
             int schoolCapacity = Math.round(
@@ -104,7 +126,7 @@ public class GenerateSchoolMicrolocation {
             int schoolType = (int) PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"schoolType");
 
             Coordinate coordinate = new Coordinate(xCoordinate,yCoordinate);
-            schoolData.addSchool(SchoolUtils.getFactory().createSchool(id, schoolType, schoolCapacity,0,coordinate, zone));
+            schoolData.addSchool(SchoolUtils.getFactory().createSchool(id, schoolType, schoolCapacity,0,coordinate, zone, municipality));
 
             if (zoneSchoolTypeSchoolLocationCapacity.get(zone) != null){
                 zoneSchoolTypeSchoolLocationCapacity.get(zone).get(schoolType).put(id,schoolCapacity);

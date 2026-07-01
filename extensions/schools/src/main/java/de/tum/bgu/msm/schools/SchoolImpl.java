@@ -12,15 +12,25 @@ public class SchoolImpl implements School, MicroLocation {
     private final int zoneId;
     private double startTimeInSeconds;
     private double studyTimeInSeconds;
+    private final int municipality;
 
 
-    public SchoolImpl(int id, int type, int capacity, int occupancy, Coordinate coordinate, int zoneId) {
+    public SchoolImpl(
+            int id,
+            int type,
+            int capacity,
+            int occupancy,
+            Coordinate coordinate,
+            int zoneId,
+            int municipality
+    ) {
         this.id = id;
         this.type = type;
         this.capacity = capacity;
+        this.occupancy = occupancy;
         this.coordinate = coordinate;
         this.zoneId = zoneId;
-        this.occupancy = occupancy;
+        this.municipality = municipality;
     }
 
     @Override
@@ -42,6 +52,11 @@ public class SchoolImpl implements School, MicroLocation {
 
     public int getOccupancy() {
         return occupancy;
+    }
+
+    @Override
+    public int getMunicipality() {
+        return municipality;
     }
 
     @Override

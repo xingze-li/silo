@@ -41,6 +41,7 @@ public class GenerateJobMicrolocation {
 
         readJobFile();
         calculateDensity();
+        initializeMunicipalityLookup();
 
         logger.info("   Start selecting job locations");
 
@@ -50,6 +51,7 @@ public class GenerateJobMicrolocation {
         for (Job jj : dataContainer.getJobDataManager().getJobs()) {
 
             int zoneID = jj.getZoneId();
+            jj.setAttribute("municipality", getMunicipalityByZone(zoneID));
             String jobType = normalizeJobType(jj.getType());
 
             Zone zone = dataContainer.getGeoData().getZones().get(zoneID);
@@ -116,6 +118,28 @@ public class GenerateJobMicrolocation {
         logger.info("   Finished job microlocation.");
         logger.info("   Jobs assigned to specific job locations: " + assignedJobs);
         logger.warn("   Jobs assigned randomly in TAZ because no specific job location was available: " + fallbackJobs);
+    }
+
+    private final Map<Integer, Integer> municipalityByZone = new HashMap<>();
+
+    private void initializeMunicipalityLookup() {
+
+        for (int row = 1; row <= PropertiesSynPop.get().main.cellsMatrix.getRowCount(); row++) {
+
+            int zone = Math.round(
+                    PropertiesSynPop.get().main.cellsMatrix.getValueAt(row, "ID_cell")
+            );
+
+            int municipality = Math.round(
+                    PropertiesSynPop.get().main.cellsMatrix.getValueAt(row, "ID_city")
+            );
+
+            municipalityByZone.put(zone, municipality);
+        }
+    }
+
+    private int getMunicipalityByZone(int zoneId) {
+        return municipalityByZone.getOrDefault(zoneId, -1);
     }
 
 
