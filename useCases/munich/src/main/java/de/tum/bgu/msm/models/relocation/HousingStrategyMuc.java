@@ -61,7 +61,7 @@ public class HousingStrategyMuc implements HousingStrategy {
     private final DwellingProbabilityStrategy dwellingProbabilityStrategy;
     private final DwellingUtilityStrategy dwellingUtilityStrategy;
 
-    private final RegionUtilityStrategy regionUtilityStrategyMuc;
+    private final de.tum.bgu.msm.models.relocation.moves.RegionUtilityStrategy regionUtilityStrategyMuc;
     private final RegionProbabilityStrategy regionProbabilityStrategy;
 
     private final LongAdder totalVacantDd = new LongAdder();
@@ -78,7 +78,7 @@ public class HousingStrategyMuc implements HousingStrategy {
                               TravelTimes travelTimes,
                               DwellingProbabilityStrategy dwellingProbabilityStrategy,
                               DwellingUtilityStrategy dwellingUtilityStrategy,
-                              RegionUtilityStrategy regionUtilityStrategy, RegionProbabilityStrategy regionProbabilityStrategy, CommuteModeChoice commuteModeChoice) {
+                              de.tum.bgu.msm.models.relocation.moves.RegionUtilityStrategy regionUtilityStrategy, RegionProbabilityStrategy regionProbabilityStrategy, CommuteModeChoice commuteModeChoice) {
         this.dataContainer = dataContainer;
         this.properties = properties;
         this.accessibility = dataContainer.getAccessibility();

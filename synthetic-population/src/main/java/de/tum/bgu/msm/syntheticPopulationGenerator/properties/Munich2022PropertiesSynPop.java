@@ -102,9 +102,9 @@ public class Munich2022PropertiesSynPop extends AbstractPropertiesSynPop {
         errorsSummaryFileName = PropertiesUtil.getStringProperty(bundle, "errors.IPU.summary.matrix", "microData/interimFiles/errorsIPUsummary.csv");
         //todo do not need to ride always?
         if (runMicrolocation) {
-            buildingLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "buildingLocation.list", "input/syntheticPopulation/buildingLocation.csv"));
-            jobLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "jobLocation.list", "input/syntheticPopulation/jobLocation.csv"));
-            schoolLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "schoolLocation.list", "input/syntheticPopulation/schoolLocation.csv"));
+            buildingLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "buildingLocation.list", "input/syntheticPopulation/buildingLocation_2022.csv"));
+            jobLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "jobLocation.list", "input/syntheticPopulation/jobLocation_5types.csv"));
+            schoolLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "schoolLocation.list", "input/syntheticPopulation/schoolLocation_2022_crs31468.csv"));
         } else {
             buildingLocationlist = null;
             jobLocationlist = null;
@@ -112,8 +112,8 @@ public class Munich2022PropertiesSynPop extends AbstractPropertiesSynPop {
         }
         zonalDataIPU = null;
         runDisability = PropertiesUtil.getBooleanProperty(bundle, "run.disability", false);
-        fullTimeProbabilityTable = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "fullTime.coefficient.table","input/syntheticPopulation/proportionFullTime.csv"));
-        fullTimeFileName = PropertiesUtil.getStringProperty(bundle, "fullTime.coefficient.table","input/syntheticPopulation/proportionFullTime.csv");
+        fullTimeProbabilityTable = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "fullTime.coefficient.table","input/syntheticPopulation/proportionFullTime_5types.csv"));
+        fullTimeFileName = PropertiesUtil.getStringProperty(bundle, "fullTime.coefficient.table","input/syntheticPopulation/proportionFullTime_5types.csv");
         durationFileName = PropertiesUtil.getStringProperty(bundle, "duration.coefficient.table","input/syntheticPopulation/mandActDurationDistributionTable.csv");
         startTimeFileName = PropertiesUtil.getStringProperty(bundle, "duration.coefficient.table","input/syntheticPopulation/mandActsStartTimeDistributionByDurationSegmentTable.csv");
 

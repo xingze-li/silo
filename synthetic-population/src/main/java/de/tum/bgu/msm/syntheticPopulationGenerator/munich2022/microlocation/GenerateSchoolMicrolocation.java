@@ -98,7 +98,9 @@ public class GenerateSchoolMicrolocation {
             int zone = (int) PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"zoneID");
             float xCoordinate = PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"x");
             float yCoordinate = PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"y");
-            int schoolCapacity = (int) PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"schoolCapacity");
+            int schoolCapacity = Math.round(
+                    PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row, "capacity")
+            );
             int schoolType = (int) PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"schoolType");
 
             Coordinate coordinate = new Coordinate(xCoordinate,yCoordinate);

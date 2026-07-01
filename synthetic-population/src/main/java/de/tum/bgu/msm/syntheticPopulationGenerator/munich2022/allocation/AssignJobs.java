@@ -136,7 +136,6 @@ public class AssignJobs {
     private void setWorkerAndJob(Person pp, int jobID){
 
         dataContainer.getJobDataManager().getJobFromId(jobID).setWorkerID(pp.getId());
-        int jobTAZ = dataContainer.getJobDataManager().getJobFromId(jobID).getZoneId();
         pp.setWorkplace(jobID);
     }
 

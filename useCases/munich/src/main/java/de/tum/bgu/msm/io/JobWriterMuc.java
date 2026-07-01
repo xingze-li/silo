@@ -41,20 +41,32 @@ public class JobWriterMuc implements JobWriter {
             pwj.print(jj.getZoneId());
             pwj.print(",");
             pwj.print(jj.getWorkerId());
-            pwj.print(",\"");
+            pwj.print(",");
             pwj.print(jj.getType());
-            pwj.print("\"");
+            pwj.print(",");
+
+//            Coordinate coordinate = jj.getCoordinate();
+//            pwj.print(",");
+//            pwj.print(coordinate.x);
+//            pwj.print(",");
+//            pwj.print(coordinate.y);
 
             Coordinate coordinate = jj.getCoordinate();
-            pwj.print(",");
-            pwj.print(coordinate.x);
-            pwj.print(",");
-            pwj.print(coordinate.y);
+
+            if (coordinate == null) {
+                pwj.print("-1");
+                pwj.print(",");
+                pwj.print("-1");
+            } else {
+                pwj.print(coordinate.x);
+                pwj.print(",");
+                pwj.print(coordinate.y);
+            }
 
             pwj.print(",");
-            pwj.print(jj.getStartTimeInSeconds().orElse(-1));
+            pwj.print(getJobAttributeOrDefault(jj, "startTimeInSeconds", "-1"));
             pwj.print(",");
-            pwj.print(jj.getWorkingTimeInSeconds().orElse(-1));
+            pwj.print(getJobAttributeOrDefault(jj, "workingTimeInSeconds", "-1"));
 
             pwj.println();
             if (jj.getId() == SiloUtil.trackJj) {
@@ -63,6 +75,12 @@ public class JobWriterMuc implements JobWriter {
             }
         }
         pwj.close();
+    }
+
+    private String getJobAttributeOrDefault(Job job, String key, String defaultValue) {
+        return job.getAttribute(key)
+                .map(Object::toString)
+                .orElse(defaultValue);
     }
 }
 

@@ -10,6 +10,7 @@ import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.CoefficientsReader
 import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
 import de.tum.bgu.msm.utils.SiloUtil;
+import de.tum.bgu.msm.data.job.Job;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -39,59 +40,161 @@ public class AssignPropertiesToJobs {
 
 
     public void run() {
-        logger.info("   Running module: job allocation");
+
+        logger.info("   Running module: job properties assignment");
+
         readCoefficients();
+
         jobData = dataContainer.getJobDataManager();
-        int assignedJobs = 0;
+
+        int assignedJobProperties = 0;
+        int skippedNoJob = 0;
+
         for (Person pp : dataContainer.getHouseholdDataManager().getPersons()) {
-            if (pp.getOccupation() == Occupation.EMPLOYED) {
-                setFullOrPartTime(pp);
-                setDurationAndStartTime(pp);
-            } else {
-                pp.setAttribute("jobDurationType","0");
-                pp.setAttribute("jobDuration", "0");
-                pp.setAttribute("jobStartTimeWorkday","0");
-                pp.setAttribute("jobStartTimeWeekend","0");
+
+            if (pp.getOccupation() != Occupation.EMPLOYED) {
+                setNoJobProperties(pp);
+                continue;
             }
-            if (LongMath.isPowerOfTwo(assignedJobs)){
-                logger.info("   Assigned " + assignedJobs + " jobs.");
+
+            boolean hasValidJob = setFullOrPartTime(pp);
+
+            if (!hasValidJob) {
+                setNoJobProperties(pp);
+                skippedNoJob++;
+                continue;
             }
-            assignedJobs++;
-            //logger.info("   Finished job properties assignment. Assigned " + assignedJobs + " jobs.");
+
+            setDurationAndStartTime(pp);
+
+            assignedJobProperties++;
+
+            if (LongMath.isPowerOfTwo(assignedJobProperties)) {
+                logger.info("   Assigned job properties to " + assignedJobProperties + " persons.");
+            }
         }
+
+        logger.info("   Finished job properties assignment.");
+        logger.info("   Assigned job properties to employed persons with valid jobs: " + assignedJobProperties);
+        logger.info("   Skipped employed persons without valid assigned jobs: " + skippedNoJob);
     }
 
-    private void setFullOrPartTime(Person pp) {
-        String type = getWorkerCategory(pp);
-        Double probability = coefficientsFullTime.get(jobData.getJobFromId(pp.getJobId()).getType()).get(type);
-        if (probability > SiloUtil.getRandomNumberAsDouble()){
-            pp.setAttribute("jobDurationType","fullTime");
+    private boolean setFullOrPartTime(Person pp) {
+
+        int jobId = pp.getJobId();
+
+        if (jobId <= 0) {
+            return false;
+        }
+
+        Job job = jobData.getJobFromId(jobId);
+
+        if (job == null) {
+            logger.warn("Person " + pp.getId() +
+                    " has jobId " + jobId +
+                    ", but no corresponding job object was found.");
+            return false;
+        }
+
+        String jobType = job.getType().trim();
+
+        Map<String, Double> coefficientsByWorkerCategory = coefficientsFullTime.get(jobType);
+
+        if (coefficientsByWorkerCategory == null) {
+            logger.warn("No full-time coefficients found for job type " + jobType +
+                    ". Person " + pp.getId() + " is assigned fullTime by default.");
+            pp.setAttribute("jobDurationType", "fullTime");
+            return true;
+        }
+
+        String workerCategory = getWorkerCategory(pp);
+
+        Double probability = coefficientsByWorkerCategory.get(workerCategory);
+
+        if (probability == null) {
+            logger.warn("No full-time probability found for job type " + jobType +
+                    " and worker category " + workerCategory +
+                    ". Person " + pp.getId() + " is assigned fullTime by default.");
+            pp.setAttribute("jobDurationType", "fullTime");
+            return true;
+        }
+
+        if (probability > SiloUtil.getRandomNumberAsDouble()) {
+            pp.setAttribute("jobDurationType", "fullTime");
         } else {
             pp.setAttribute("jobDurationType", "partTime");
         }
+
+        return true;
     }
 
-    private void setDurationAndStartTime(Person pp){
+    private void setNoJobProperties(Person pp) {
+        pp.setAttribute("jobDurationType", "0");
+        pp.setAttribute("jobDuration", "0");
+        pp.setAttribute("jobStartTimeWorkday", "0");
+        pp.setAttribute("jobStartTimeWeekend", "0");
+    }
 
-        String q = pp.getAttribute("jobDurationType").toString();
-        String durationInMinutes = SiloUtil.select(coefficientsDuration.get(pp.getAttribute("jobDurationType").get().toString()));
+    private void setDurationAndStartTime(Person pp) {
+
+        String durationType = pp.getAttribute("jobDurationType")
+                .map(Object::toString)
+                .orElse("0");
+
+        Map<String, Double> durationDistribution = coefficientsDuration.get(durationType);
+
+        if (durationDistribution == null) {
+            setNoJobProperties(pp);
+            return;
+        }
+
+        String durationInMinutes = SiloUtil.select(durationDistribution);
+
         pp.setAttribute("jobDuration", durationInMinutes);
-        String startTimeWorkdayInMinutes = "";
-        String startTimeWeekendInMinutes = "";
-        String durationKey = "";
-        if (Integer.parseInt(durationInMinutes) < 3*60){
+
+        String durationKey;
+
+        if (Integer.parseInt(durationInMinutes) < 3 * 60) {
             durationKey = "0_3";
-        } else if (Integer.parseInt(durationInMinutes) < 6*60){
+        } else if (Integer.parseInt(durationInMinutes) < 6 * 60) {
             durationKey = "4_6";
-        } else if (Integer.parseInt(durationInMinutes) < 10*60){
+        } else if (Integer.parseInt(durationInMinutes) < 10 * 60) {
             durationKey = "7_10";
         } else {
             durationKey = "11+";
         }
-        startTimeWorkdayInMinutes = SiloUtil.select(coefficientsStartTimeWorkday.get(durationKey));
-        startTimeWeekendInMinutes = SiloUtil.select(coefficientsStartTimeWeekend.get(durationKey));
-        pp.setAttribute("jobStartTimeWorkday",startTimeWorkdayInMinutes);
-        pp.setAttribute("jobStartTimeWeekend",startTimeWeekendInMinutes);
+
+        Map<String, Double> startTimeWorkdayDistribution =
+                coefficientsStartTimeWorkday.get(durationKey);
+
+        Map<String, Double> startTimeWeekendDistribution =
+                coefficientsStartTimeWeekend.get(durationKey);
+
+        if (startTimeWorkdayDistribution == null || startTimeWeekendDistribution == null) {
+            pp.setAttribute("jobStartTimeWorkday", "480");
+            pp.setAttribute("jobStartTimeWeekend", "0");
+            return;
+        }
+
+        String startTimeWorkdayInMinutes = SiloUtil.select(startTimeWorkdayDistribution);
+        String startTimeWeekendInMinutes = SiloUtil.select(startTimeWeekendDistribution);
+
+        pp.setAttribute("jobStartTimeWorkday", startTimeWorkdayInMinutes);
+        pp.setAttribute("jobStartTimeWeekend", startTimeWeekendInMinutes);
+
+        int jobId = pp.getJobId();
+
+        if (jobId > 0) {
+            Job job = jobData.getJobFromId(jobId);
+
+            if (job != null) {
+                int startTimeWorkdaySeconds = Integer.parseInt(startTimeWorkdayInMinutes) * 60;
+                int durationSeconds = Integer.parseInt(durationInMinutes) * 60;
+
+                job.setAttribute("startTimeInSeconds", startTimeWorkdaySeconds);
+                job.setAttribute("workingTimeInSeconds", durationSeconds);
+            }
+        }
     }
 
     private void readCoefficients() {
