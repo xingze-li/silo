@@ -99,7 +99,7 @@ public class GenerateHouseholdsPersonsDwellings {
                 int hhSelected = hhSelection[draw];
                 int tazSelected = selectTAZ();
 
-                Household household = generateHousehold();
+                Household household = generateHousehold(hhSelected);
 
                 generateDwelling(
                         hhSelected,
@@ -121,14 +121,41 @@ public class GenerateHouseholdsPersonsDwellings {
     }
 
 
-    private Household generateHousehold(){
+    private Household generateHousehold(int hhSelected) {
 
         HouseholdFactory factory = householdData.getHouseholdFactory();
         int id = householdData.getNextHouseholdId();
-        Household household = factory.createHousehold(id,id,0);
-                householdData.addHousehold(household);
+
+        Household household = factory.createHousehold(id, id, 0);
+
+        copyHouseholdMicroAttributes(household, hhSelected);
+
+        householdData.addHousehold(household);
         householdCounter++;
+
         return household;
+    }
+
+    private void copyHouseholdMicroAttributes(Household household, int hhSelected) {
+
+        copyHouseholdAttribute(household, hhSelected, "personCount");
+        copyHouseholdAttribute(household, hhSelected, "h.size");
+        copyHouseholdAttribute(household, hhSelected, "h.type");
+        copyHouseholdAttribute(household, hhSelected, "h.income");
+    }
+
+    private void copyHouseholdAttribute(Household household, int hhSelected, String columnName) {
+
+        try {
+            int value = Math.round(
+                    dataSetSynPop.getHouseholdDataSet().getValueAt(hhSelected, columnName)
+            );
+
+            household.setAttribute(columnName, value);
+
+        } catch (Exception e) {
+            household.setAttribute(columnName, 0);
+        }
     }
 
 
@@ -215,6 +242,8 @@ public class GenerateHouseholdsPersonsDwellings {
                     income
             );
 
+            copyPersonMicroAttributes(pers, personSelected);
+
             int rawJobType = Math.round(
                     dataSetSynPop.getPersonDataSet().getValueAt(personSelected, "p.jobType")
             );
@@ -251,6 +280,42 @@ public class GenerateHouseholdsPersonsDwellings {
         }
     }
 
+    private void copyPersonMicroAttributes(Person person, int rowPerson) {
+
+        copyPersonAttribute(person, rowPerson, "p.BMI");
+        copyPersonAttribute(person, rowPerson, "p.education");
+        copyPersonAttribute(person, rowPerson, "p.privateHousehold");
+        copyPersonAttribute(person, rowPerson, "p.partnerInHousehold");
+        copyPersonAttribute(person, rowPerson, "p.healthStatusIndex");
+        copyPersonAttribute(person, rowPerson, "p.householdRole");
+        copyPersonAttribute(person, rowPerson, "p.income");
+        copyPersonAttribute(person, rowPerson, "p.smokeFrequency");
+        copyPersonAttribute(person, rowPerson, "p.generalHealth");
+        copyPersonAttribute(person, rowPerson, "p.school");
+        copyPersonAttribute(person, rowPerson, "p.disability");
+        copyPersonAttribute(person, rowPerson, "p.municipalityType");
+        copyPersonAttribute(person, rowPerson, "p.federal");
+        copyPersonAttribute(person, rowPerson, "p.nationality");
+        copyPersonAttribute(person, rowPerson, "p.maritalStatus");
+        copyPersonAttribute(person, rowPerson, "p.physicalImpairmentIndex");
+        copyPersonAttribute(person, rowPerson, "p.restriction");
+        copyPersonAttribute(person, rowPerson, "p.homeOffice");
+        copyPersonAttribute(person, rowPerson, "p.disabilityDegree");
+    }
+
+    private void copyPersonAttribute(Person person, int rowPerson, String columnName) {
+
+        try {
+            int value = Math.round(
+                    dataSetSynPop.getPersonDataSet().getValueAt(rowPerson, columnName)
+            );
+
+            person.setAttribute(columnName, value);
+
+        } catch (Exception e) {
+            person.setAttribute(columnName, 0);
+        }
+    }
 
 //    private void generateDwelling(int hhSelected, int idHousehold, int tazSelected, int municipality){
 //

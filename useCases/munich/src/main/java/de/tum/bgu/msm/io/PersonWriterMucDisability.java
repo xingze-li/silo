@@ -22,69 +22,6 @@ public class PersonWriterMucDisability implements PersonWriter {
     }
 
     @Override
-//    public void writePersons(String path) {
-//
-//        logger.info("  Writing person file to " + path);
-//        PrintWriter pwp = SiloUtil.openFileForSequentialWriting(path, false);
-//        pwp.print("id,hhid,age,gender,relationShip,occupation,driversLicense,workplace,income");
-//        pwp.print(",");
-//        pwp.print("nationality");
-//        pwp.print(",");
-//        pwp.print("disability");
-//        pwp.print(",");
-//        pwp.print("schoolId");
-//        pwp.print(",");
-//        pwp.print("jobType");
-//        pwp.print(",");
-//        pwp.print("jobDuration");
-//        pwp.print(",");
-//        pwp.print("jobStartTimeWorkdays");
-//        pwp.print(",");
-//        pwp.print("jobStartTimeWeekends");
-//
-//        pwp.println();
-//        for (Person pp : householdData.getPersons()) {
-//            pwp.print(pp.getId());
-//            pwp.print(",");
-//            pwp.print(pp.getHousehold().getId());
-//            pwp.print(",");
-//            pwp.print(pp.getAge());
-//            pwp.print(",");
-//            pwp.print(pp.getGender().getCode());
-//            pwp.print(",\"");
-//            String role = pp.getRole().toString();
-//            pwp.print(role);
-//            pwp.print("\",");
-//            pwp.print(pp.getOccupation().getCode());
-//            pwp.print(",");
-//            pwp.print(pp.hasDriverLicense());
-//            pwp.print(",");
-//            pwp.print(pp.getJobId());
-//            pwp.print(",");
-//            pwp.print(pp.getAnnualIncome());
-//            pwp.print(",");
-//            pwp.print("0");
-//            pwp.print(",");
-//            pwp.print(pp.getAttribute("disability").get().toString());
-//            pwp.print(",");
-//            pwp.print("0");
-//            pwp.print(",");
-//            pwp.print(pp.getAttribute("jobDurationType").get().toString());
-//            pwp.print(",");
-//            pwp.print(pp.getAttribute("jobDuration").get().toString());
-//            pwp.print(",");
-//            pwp.print(pp.getAttribute("jobStartTimeWorkday").get().toString());
-//            pwp.print(",");
-//            pwp.print(pp.getAttribute("jobStartTimeWeekend").get().toString());
-//            pwp.println();
-//            if (pp.getId() == SiloUtil.trackPp) {
-//                SiloUtil.trackingFile("Writing pp " + pp.getId() + " to micro data file.");
-//                SiloUtil.trackWriter.println(pp.toString());
-//            }
-//        }
-//        pwp.close();
-//    }
-
     public void writePersons(String path) {
 
         logger.info("  Writing person file to " + path);
@@ -102,6 +39,16 @@ public class PersonWriterMucDisability implements PersonWriter {
         pwp.print(",jobDuration");
         pwp.print(",jobStartTimeWorkday");
         pwp.print(",jobStartTimeWeekend");
+        pwp.print(",p.BMI");
+        pwp.print(",p.education");
+        pwp.print(",p.healthStatusIndex");
+        pwp.print(",p.smokeFrequency");
+        pwp.print(",p.generalHealth");
+        pwp.print(",p.disability");
+        pwp.print(",p.physicalImpairmentIndex");
+        pwp.print(",p.restriction");
+        pwp.print(",p.homeOffice");
+        pwp.print(",p.disabilityDegree");
         pwp.println();
 
         for (Person pp : householdData.getPersons()) {
@@ -163,6 +110,36 @@ public class PersonWriterMucDisability implements PersonWriter {
             pwp.print(",");
 
             pwp.print(getAttributeOrDefault(pp, "jobStartTimeWeekend", "0"));
+            pwp.print(",");
+
+            pwp.print(getAttributeOrDefault(pp, "p.BMI", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.education", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.healthStatusIndex", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.smokeFrequency", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.generalHealth", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.disability", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.physicalImpairmentIndex", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.restriction", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.homeOffice", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.disabilityDegree", "0"));
 
             pwp.println();
 
