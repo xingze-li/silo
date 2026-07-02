@@ -1,70 +1,154 @@
 package de.tum.bgu.msm.io;
 
-import de.tum.bgu.msm.container.DataContainer;
 import de.tum.bgu.msm.data.dwelling.Dwelling;
-import de.tum.bgu.msm.data.dwelling.DwellingImpl;
-import de.tum.bgu.msm.io.output.DefaultDwellingWriter;
 import de.tum.bgu.msm.io.output.DwellingWriter;
 import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.locationtech.jts.geom.Coordinate;
 
 import java.io.PrintWriter;
+import java.util.Collection;
 
 public class DwellingWriterMuc implements DwellingWriter {
-    private final static Logger logger = LogManager.getLogger(DefaultDwellingWriter.class);
-    private final DataContainer dataContainer;
+    private final static Logger logger = LogManager.getLogger(DwellingWriterMuc.class);
 
-    public DwellingWriterMuc(DataContainer dataContainer) {
-        this.dataContainer = dataContainer;
+    private final Collection<Dwelling> dwellings;
+
+    public DwellingWriterMuc(Collection<Dwelling> dwellings) {
+        this.dwellings = dwellings;
     }
 
     @Override
     public void writeDwellings(String path) {
+
         logger.info("  Writing dwelling file to " + path);
+        logger.info("  Using DwellingWriterMuc with extended dwelling attributes.");
+
         PrintWriter pwd = SiloUtil.openFileForSequentialWriting(path, false);
-        pwd.print("id,zone,type,hhID,bedrooms,quality,monthlyCost,yearBuilt");
-        pwd.print(",");
-        pwd.print("floor");
-        pwd.print(",");
-        pwd.print("building");
-        pwd.print(",");
-        pwd.print("coordX");
-        pwd.print(",");
-        pwd.print("coordY");
+
+        pwd.print("id,zone,hhId,type,bedrooms,quality,monthlyCost,year,coordX,coordY");
+
+        pwd.print(",d.buildingSize");
+        pwd.print(",d.rent");
+        pwd.print(",d.year");
+        pwd.print(",d.heating.district");
+        pwd.print(",d.type");
+        pwd.print(",d.numberOfHeatingTypes");
+        pwd.print(",d.use");
+        pwd.print(",d.heating.stoves");
+        pwd.print(",d.space");
+        pwd.print(",d.numberOfRooms");
+        pwd.print(",d.totalRent");
+        pwd.print(",d.heatingEnergy");
+        pwd.print(",d.heating.central");
+        pwd.print(",d.heating.floor");
+        pwd.print(",d.numberOfApartments");
+        pwd.print(",d.buildingUsage");
 
         pwd.println();
 
-        for (Dwelling dd : dataContainer.getRealEstateDataManager().getDwellings()) {
+        for (Dwelling dd : dwellings) {
+
             pwd.print(dd.getId());
             pwd.print(",");
+
             pwd.print(dd.getZoneId());
-            pwd.print(",\"");
-            pwd.print(dd.getType());
-            pwd.print("\",");
+            pwd.print(",");
+
             pwd.print(dd.getResidentId());
             pwd.print(",");
+
+            pwd.print(dd.getType());
+            pwd.print(",");
+
             pwd.print(dd.getBedrooms());
             pwd.print(",");
+
             pwd.print(dd.getQuality());
             pwd.print(",");
+
             pwd.print(dd.getPrice());
             pwd.print(",");
+
             pwd.print(dd.getYearBuilt());
+
+            Coordinate coordinate = dd.getCoordinate();
+
             pwd.print(",");
-            pwd.print(dd.getFloorSpace());
+
+            if (coordinate == null) {
+                pwd.print("-1");
+                pwd.print(",");
+                pwd.print("-1");
+            } else {
+                pwd.print(coordinate.x);
+                pwd.print(",");
+                pwd.print(coordinate.y);
+            }
+
             pwd.print(",");
-            pwd.print(dd.getUsage());
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.buildingSize", "0"));
+
             pwd.print(",");
-            pwd.print(dd.getCoordinate().x);
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.rent", "0"));
+
             pwd.print(",");
-            pwd.print(dd.getCoordinate().y);
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.year", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.heating.district", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.type", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.numberOfHeatingTypes", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.use", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.heating.stoves", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.space", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.numberOfRooms", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.totalRent", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.heatingEnergy", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.heating.central", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.heating.floor", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.numberOfApartments", "0"));
+
+            pwd.print(",");
+            pwd.print(getDwellingAttributeOrDefault(dd, "d.buildingUsage", "0"));
+
             pwd.println();
+
             if (dd.getId() == SiloUtil.trackDd) {
                 SiloUtil.trackingFile("Writing dd " + dd.getId() + " to micro data file.");
                 SiloUtil.trackWriter.println(dd.toString());
             }
         }
+
         pwd.close();
+    }
+
+    private String getDwellingAttributeOrDefault(Dwelling dwelling, String key, String defaultValue) {
+        return dwelling.getAttribute(key)
+                .map(Object::toString)
+                .orElse(defaultValue);
     }
 }

@@ -1,10 +1,7 @@
 package de.tum.bgu.msm.syntheticPopulationGenerator.munich2022;
 
 import de.tum.bgu.msm.DataBuilder;
-import de.tum.bgu.msm.io.GeoDataReaderMuc;
-import de.tum.bgu.msm.io.HouseholdWriterMucDisability;
-import de.tum.bgu.msm.io.JobWriterMuc;
-import de.tum.bgu.msm.io.PersonWriterMucDisability;
+import de.tum.bgu.msm.io.*;
 import de.tum.bgu.msm.io.input.GeoDataReader;
 import de.tum.bgu.msm.io.output.*;
 import de.tum.bgu.msm.properties.Properties;
@@ -111,7 +108,10 @@ public class SyntheticPopDe implements SyntheticPopI {
                 + "_"
                 + properties.main.baseYear
                 + "P.csv";
-        DwellingWriter ddwriter = new DefaultDwellingWriter(dataContainer.getRealEstateDataManager().getDwellings());
+        DwellingWriter ddwriter = new DwellingWriterMuc(
+                dataContainer.getRealEstateDataManager().getDwellings()
+        );
+
         ddwriter.writeDwellings(filedd);
 
         String filejj = properties.main.baseDirectory

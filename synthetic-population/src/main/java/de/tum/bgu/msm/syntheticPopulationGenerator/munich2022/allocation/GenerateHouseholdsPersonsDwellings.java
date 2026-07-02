@@ -452,9 +452,47 @@ public class GenerateHouseholdsPersonsDwellings {
                 year
         );
 
+        copyDwellingMicroAttributes(dwell, hhSelected);
+
         realEstate.addDwelling(dwell);
         dwell.setFloorSpace(floorSpace);
         dwell.setUsage(usage);
+    }
+
+    private void copyDwellingMicroAttributes(Dwelling dwelling, int rowDwelling) {
+
+        copyDwellingAttribute(dwelling, rowDwelling, "d.buildingSize");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.rent");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.year");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.heating.district");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.type");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.numberOfHeatingTypes");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.use");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.heating.stoves");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.space");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.numberOfRooms");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.totalRent");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.heatingEnergy");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.heating.central");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.heating.floor");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.numberOfApartments");
+        copyDwellingAttribute(dwelling, rowDwelling, "d.buildingUsage");
+    }
+
+    private void copyDwellingAttribute(Dwelling dwelling, int rowDwelling, String columnName) {
+
+        try {
+            float value = dataSetSynPop.getDwellingDataSet().getValueAt(rowDwelling, columnName);
+
+            if (Math.abs(value - Math.round(value)) < 0.0001) {
+                dwelling.setAttribute(columnName, Math.round(value));
+            } else {
+                dwelling.setAttribute(columnName, value);
+            }
+
+        } catch (Exception e) {
+            dwelling.setAttribute(columnName, 0);
+        }
     }
 
 

@@ -49,7 +49,9 @@ public class RunSampleGenerator {
 //
 
 
-        new DwellingWriterMuc(dataContainer).writeDwellings("C:/Users/Qin/Desktop/dd_2011.csv");
+        new DwellingWriterMuc(
+                dataContainer.getRealEstateDataManager().getDwellings()
+        ).writeDwellings("C:/Users/Qin/Desktop/dd_2011.csv");
         new DefaultHouseholdWriter(dataContainer.getHouseholdDataManager().getHouseholds()).writeHouseholds("C:/Users/Qin/Desktop/hh_2011.csv");
         new PersonWriterMuc(dataContainer.getHouseholdDataManager()).writePersons("C:/Users/Qin/Desktop/pp_2011.csv");
         new JobWriterMuc(dataContainer.getJobDataManager()).writeJobs("C:/Users/Qin/Desktop/jj_2011.csv");
