@@ -596,7 +596,7 @@ public class GenerateHouseholdsPersonsDwellings {
 
     private int[] selectBestHouseholdSimulation(int municipality) {
 
-        int simulationsPerMunicipality = 10; //10 times simulation and get the closest to population
+        int simulationsPerMunicipality = 20; //10 times simulation and get the closest to population
 
         int targetPopulation = Math.round(
                 PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(
