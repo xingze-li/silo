@@ -45,18 +45,32 @@ public class ValidateTripLengthDistribution {
 
     private void summarizeCommutersTripLength(){
         ArrayList<Person> workerArrayList = obtainWorkers();
-        Frequency travelTimes = obtainFlows(workerArrayList);
+        Frequency travelTimes = obtainWorkerFlows(workerArrayList);
         summarizeFlows(travelTimes, "microData/interimFiles/tripLengthDistributionWork.csv");
         SiloUtil.writeTableDataSet(municipalityODMatrix, "microData/interimFiles/odMatrixMunicipalityFinal.csv");
         SiloUtil.writeTableDataSet(countyODMatrix, "microData/interimFiles/odMatrixCountyFinal.csv");
     }
 
 
-    private void summarizeStudentsTripLength(){
-        for (int school = 1; school <= 3 ; school++){
-            ArrayList<Person> studentArrayList = obtainStudents(school);
-            Frequency travelTimes = obtainFlows(studentArrayList);
-            summarizeFlows(travelTimes, "microData/interimFiles/tripLengthDistributionSchool" + school + ".csv");
+    private void summarizeStudentsTripLength() {
+
+        for (int schoolType = 1;
+             schoolType <= 3;
+             schoolType++) {
+
+            ArrayList<Person> students =
+                    obtainStudents(schoolType);
+
+            Frequency distances =
+                    obtainStudentFlows(students);
+
+            summarizeFlows(
+                    distances,
+                    "microData/interimFiles/" +
+                            "tripLengthDistributionSchool" +
+                            schoolType +
+                            ".csv"
+            );
         }
     }
 
@@ -72,22 +86,99 @@ public class ValidateTripLengthDistribution {
     }
 
 
-    private Frequency obtainFlows(ArrayList<Person> personArrayList){
+//    private Frequency obtainFlows(ArrayList<Person> personArrayList){
+//        Frequency commuteDistance = new Frequency();
+//        RealEstateDataManager realEstate = dataContainer.getRealEstateDataManager();
+//        JobDataManager jobDataManager = dataContainer.getJobDataManager();
+//        for (Person pp : personArrayList){
+//            //TODO not part of the public person api anymore
+//            if (pp.getJobId() > 0){
+//                Household hh = pp.getHousehold();
+//                int origin = realEstate.getDwelling(hh.getDwellingId()).getZoneId();
+//                int destination = jobDataManager.getJobFromId(pp.getJobId()).getZoneId();
+//                int value = (int) dataSetSynPop.getDistanceTazToTaz().getValueAt(origin, destination);
+//                commuteDistance.addValue(value);
+//            }
+//        }
+//        return commuteDistance;
+//    }
+
+
+    private Frequency obtainWorkerFlows(
+            ArrayList<Person> workers
+    ) {
         Frequency commuteDistance = new Frequency();
-        RealEstateDataManager realEstate = dataContainer.getRealEstateDataManager();
-        JobDataManager jobDataManager = dataContainer.getJobDataManager();
-        for (Person pp : personArrayList){
-            //TODO not part of the public person api anymore
-            if (pp.getJobId() > 0){
+
+        RealEstateDataManager realEstate =
+                dataContainer.getRealEstateDataManager();
+
+        JobDataManager jobDataManager =
+                dataContainer.getJobDataManager();
+
+        for (Person pp : workers) {
+
+            if (pp.getJobId() > 0) {
+
                 Household hh = pp.getHousehold();
-                int origin = realEstate.getDwelling(hh.getDwellingId()).getZoneId();
-                int destination = jobDataManager.getJobFromId(pp.getJobId()).getZoneId();
-                int value = (int) dataSetSynPop.getDistanceTazToTaz().getValueAt(origin, destination);
-                commuteDistance.addValue(value);
+
+                int origin =
+                        realEstate
+                                .getDwelling(hh.getDwellingId())
+                                .getZoneId();
+
+                int destination =
+                        jobDataManager
+                                .getJobFromId(pp.getJobId())
+                                .getZoneId();
+
+                int distance =
+                        (int) dataSetSynPop
+                                .getDistanceTazToTaz()
+                                .getValueAt(origin, destination);
+
+                commuteDistance.addValue(distance);
             }
         }
+
         return commuteDistance;
     }
+
+    private Frequency obtainStudentFlows(
+            ArrayList<Person> students
+    ) {
+        Frequency schoolDistance = new Frequency();
+
+        RealEstateDataManager realEstate =
+                dataContainer.getRealEstateDataManager();
+
+        for (Person person : students) {
+
+            PersonMuc student = (PersonMuc) person;
+
+            int schoolZone = student.getSchoolPlace();
+
+            if (schoolZone <= 0) {
+                continue;
+            }
+
+            Household household = student.getHousehold();
+
+            int homeZone =
+                    realEstate
+                            .getDwelling(household.getDwellingId())
+                            .getZoneId();
+
+            int distance =
+                    (int) dataSetSynPop
+                            .getDistanceTazToTaz()
+                            .getValueAt(homeZone, schoolZone);
+
+            schoolDistance.addValue(distance);
+        }
+
+        return schoolDistance;
+    }
+
 
 
     private void summarizeFlows(Frequency travelTimes, String fileName){
@@ -103,17 +194,32 @@ public class ValidateTripLengthDistribution {
     }
 
 
-    private void writeVectorToCSV(int[] thresholds, double[] frequencies, String outputFile){
-        try {
-            PrintWriter pw = new PrintWriter(new FileWriter(outputFile, true));
-            pw.println("threshold,frequency");
-            for (int i = 0; i< thresholds.length; i++) {
-                pw.println(thresholds[i] + "," + frequencies[i]);
+    private void writeVectorToCSV(
+            int[] thresholds,
+            double[] frequencies,
+            String outputFile
+    ) {
+        try (
+                PrintWriter writer =
+                        new PrintWriter(
+                                new FileWriter(outputFile, false)
+                        )
+        ) {
+            writer.println("threshold,frequency");
+
+            for (int i = 0; i < thresholds.length; i++) {
+                writer.println(
+                        thresholds[i] + "," +
+                                frequencies[i]
+                );
             }
-            pw.flush();
-            pw.close();
+
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException(
+                    "Cannot write trip-length distribution: " +
+                            outputFile,
+                    e
+            );
         }
     }
 
