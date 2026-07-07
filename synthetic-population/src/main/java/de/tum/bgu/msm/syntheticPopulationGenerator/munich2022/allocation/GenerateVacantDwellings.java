@@ -2,7 +2,11 @@ package de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.allocation;
 
 import de.tum.bgu.msm.container.DataContainer;
 import de.tum.bgu.msm.data.MunichDwellingTypes;
-import de.tum.bgu.msm.data.dwelling.*;
+import de.tum.bgu.msm.data.dwelling.Dwelling;
+import de.tum.bgu.msm.data.dwelling.DwellingType;
+import de.tum.bgu.msm.data.dwelling.DwellingUsage;
+import de.tum.bgu.msm.data.dwelling.DwellingUtils;
+import de.tum.bgu.msm.data.dwelling.RealEstateDataManager;
 import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
 import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.preparation.MicroDataManager;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
@@ -10,255 +14,650 @@ import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public class GenerateVacantDwellings {
 
     private static final Logger logger = LogManager.getLogger(GenerateVacantDwellings.class);
 
+    private static final int BASE_YEAR = 2022;
+    private static final double WARNING_RELATIVE_GAP = 0.02;
+    private static final double LARGE_WARNING_RELATIVE_GAP = 0.10;
+
+    private static final String[] VACANT_TYPE_COLUMNS = {
+            "d.vacant.type.MFH13OrMoreDwelling",
+            "d.vacant.type.MFH3to6Dwelling",
+            "d.vacant.type.MFH7to12Dwelling",
+            "d.vacant.type.detached1Dwelling",
+            "d.vacant.type.detached2Dwelling",
+            "d.vacant.type.other",
+            "d.vacant.type.semiDetached1Dwelling",
+            "d.vacant.type.semiDetached2Dwelling",
+            "d.vacant.type.terraced1Dwelling",
+            "d.vacant.type.terraced2Dwelling"
+    };
+
+    private static final String[] VACANT_YEAR_COLUMNS = {
+            "d.vacant.year.before1950",
+            "d.vacant.year.1950to1969",
+            "d.vacant.year.1970to1989",
+            "d.vacant.year.1990to2009",
+            "d.vacant.year.2010AndLater"
+    };
+
     private final DataSetSynPop dataSetSynPop;
     private final MicroDataManager microDataManager;
-    private Map<Integer, Map<Integer, Float>> ddQuality;
-    private float ddTypeProbOfSFAorSFD;
-    private float ddTypeProbOfMF234orMF5plus;
-    private float ddTypeProbOfEFHFreistehend;
-    private float ddTypeProbOfEFHDoppelhaus;
-    private float ddTypeProbOfEFHReihenhaus;
-    private float ddTypeProbOfMFH;
-
-    private Map<Integer, Float> probVacantBuildingSize;
-    private Map<Integer, Float> probVacantFloor;
-    private Map<Integer, Float> probVacantYear;
-    private Map<Integer, Float> probVacantBedrooms;
-    private Map<DwellingType, Float> probVacantType;
-    private double[] probabilityTAZ;
-    private double sumTAZs;
-    private int[] ids;
-    private int[] idTAZs;
-    private int highestDwellingIdInUse;
     private final DataContainer dataContainer;
+
     private RealEstateDataManager realEstateData;
+    private int highestDwellingIdInUse;
 
+    /** municipality/year-bracket -> quality distribution */
+    private final Map<Integer, Map<Integer, Float>> ddQuality = new HashMap<>();
 
-    public GenerateVacantDwellings(DataContainer dataContainer, DataSetSynPop dataSetSynPop){
+    /** Exact donor pool: municipality -> type -> yearBracket -> occupied dwellings. */
+    private final Map<Integer, Map<DwellingType, Map<Integer, List<Dwelling>>>> donorsExact = new HashMap<>();
+
+    /** Fallback donor pool: municipality -> type -> occupied dwellings. */
+    private final Map<Integer, Map<DwellingType, List<Dwelling>>> donorsByType = new HashMap<>();
+
+    /** Fallback donor pool: municipality -> occupied dwellings. */
+    private final Map<Integer, List<Dwelling>> donorsByMunicipality = new HashMap<>();
+
+    /** Global last-resort donor pool. */
+    private final List<Dwelling> allOccupiedDonors = new ArrayList<>();
+
+    /** Used to map source category "other" to the municipality's occupied type structure. */
+    private final Map<Integer, Map<DwellingType, Integer>> occupiedTypeCounts = new HashMap<>();
+
+    public GenerateVacantDwellings(DataContainer dataContainer, DataSetSynPop dataSetSynPop) {
         this.dataContainer = dataContainer;
         this.dataSetSynPop = dataSetSynPop;
-        microDataManager = new MicroDataManager(dataSetSynPop);
+        this.microDataManager = new MicroDataManager(dataSetSynPop);
     }
 
-    public void run(){
-        logger.info("   Running module: household, person and dwelling generation");
-        initializeQualityAndIncomeDistributions();
+    public void run() {
+        logger.info("Running module: vacant dwelling generation");
+        initializeOccupiedDwellingDistributions();
         generateVacantDwellings();
     }
 
-
-    private void initializeQualityAndIncomeDistributions(){
-
+    private void initializeOccupiedDwellingDistributions() {
         realEstateData = dataContainer.getRealEstateDataManager();
-        for (Dwelling dd: realEstateData.getDwellings()){
-            int municipality = (int) PropertiesSynPop.get().main.cellsMatrix.getIndexedValueAt(dd.getZoneId(),"ID_city");
-            updateQualityMap(municipality, dd.getYearBuilt(), dd.getQuality());
-        }
         highestDwellingIdInUse = 0;
-        for (Dwelling dd: realEstateData.getDwellings()) {
-            highestDwellingIdInUse = Math.max(highestDwellingIdInUse, dd.getId());
-        }
 
-    }
+        for (Dwelling dwelling : realEstateData.getDwellings()) {
+            highestDwellingIdInUse = Math.max(highestDwellingIdInUse, dwelling.getId());
 
-    private void generateVacantDwellings(){
+            int municipality = (int) PropertiesSynPop.get().main.cellsMatrix
+                    .getIndexedValueAt(dwelling.getZoneId(), "ID_city");
 
-        for (int municipality : dataSetSynPop.getMunicipalities()){
-            int vacantDwellings =(int) PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, "totalDwellingsVacant");
-            initializeVacantDwellingData(municipality);
-            int vacantCounter = 0;
-            int[] tazSelection = selectMultipleTAZ(vacantDwellings);
-            for (int draw = 0; draw < vacantDwellings; draw++){
-                int tazSelected = tazSelection[draw];
-                //++highestDwellingIdInUse pre-increment
-                int newDdId = ++highestDwellingIdInUse;
-//                int floorSpace = microDataManager.guessFloorSpace(SiloUtil.select(probVacantFloor));
-                int floorSpace = SiloUtil.select(probVacantFloor);
-//                int buildingYearSize = SiloUtil.select(probVacantBuildingSize);
-//                int year = microDataManager.dwellingYearfromBracket(extractYear(buildingYearSize));
-                int year = SiloUtil.select(probVacantYear);
-//                DwellingType type = extractDwellingType(buildingYearSize, ddTypeProbOfSFAorSFD, ddTypeProbOfMF234orMF5plus);
-                DwellingType type = SiloUtil.select(probVacantType);
-//                int bedRooms = microDataManager.guessBedrooms(floorSpace);
-                int bedRooms = SiloUtil.select(probVacantBedrooms);
-//                int quality = selectQualityVacant(municipality, extractYear(buildingYearSize));
-                int quality = selectQualityVacant(municipality, year);
-                int groundPrice = dataSetSynPop.getDwellingPriceByTypeAndZone().get(tazSelected).get(type);
-                int price = microDataManager.guessPrice(groundPrice, quality, floorSpace, DwellingUsage.VACANT);
-                Dwelling dwell = DwellingUtils.getFactory().createDwelling(newDdId, tazSelected, null, -1, type, bedRooms, quality, price, year); //newDwellingId, raster cell, HH Id, ddType, bedRooms, quality, price, restriction, construction year
+            updateQualityMap(municipality, dwelling.getYearBuilt(), dwelling.getQuality());
 
-                realEstateData.addDwelling(dwell);
-                dwell.setUsage(DwellingUsage.VACANT);
-                dwell.setFloorSpace(floorSpace);
-                vacantCounter++;
+            // Only occupied dwellings are donors for the vacant stock.
+            if (dwelling.getResidentId() <= 0) {
+                continue;
             }
-            logger.info("Municipality " + municipality + ". Generated vacant dwellings: " + vacantCounter);
+
+            int yearBracket = microDataManager.dwellingYearBracket(dwelling.getYearBuilt());
+            DwellingType type = dwelling.getType();
+
+            donorsExact
+                    .computeIfAbsent(municipality, key -> new HashMap<>())
+                    .computeIfAbsent(type, key -> new HashMap<>())
+                    .computeIfAbsent(yearBracket, key -> new ArrayList<>())
+                    .add(dwelling);
+
+            donorsByType
+                    .computeIfAbsent(municipality, key -> new HashMap<>())
+                    .computeIfAbsent(type, key -> new ArrayList<>())
+                    .add(dwelling);
+
+            donorsByMunicipality
+                    .computeIfAbsent(municipality, key -> new ArrayList<>())
+                    .add(dwelling);
+
+            allOccupiedDonors.add(dwelling);
+
+            occupiedTypeCounts
+                    .computeIfAbsent(municipality, key -> new HashMap<>())
+                    .merge(type, 1, Integer::sum);
         }
     }
 
+    private void generateVacantDwellings() {
+        for (int municipality : dataSetSynPop.getMunicipalities()) {
 
-    private void initializeVacantDwellingData(int municipality){
+            int targetVacant = Math.max(0, Math.round(getMarginal(municipality, "d.vacant")));
+            if (targetVacant == 0) {
+                logger.info("Municipality {}. No vacant dwellings to generate.", municipality);
+                continue;
+            }
 
-        probVacantFloor = new HashMap<>();
-        for (int floor : PropertiesSynPop.get().main.sizeBracketsDwelling) {
-            probVacantFloor.put(floor, PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, "vacantDwellings" + floor));
-        }
+            Map<String, Integer> typeCounts = normalizeMarginalCounts(
+                    municipality,
+                    VACANT_TYPE_COLUMNS,
+                    targetVacant,
+                    "vacant type"
+            );
 
-        probVacantYear = new HashMap<>();
-        for (int year : PropertiesSynPop.get().main.yearBracketsDwelling) {
-            probVacantYear.put(year, PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, "vacantDwellingsYear" + year));
-        }
+            Map<String, Integer> yearCounts = normalizeMarginalCounts(
+                    municipality,
+                    VACANT_YEAR_COLUMNS,
+                    targetVacant,
+                    "vacant year"
+            );
 
-        probVacantBedrooms = new HashMap<>();
-        for (int bedrooms : PropertiesSynPop.get().main.bedroomsBracketsDwelling) {
-            probVacantBedrooms.put(bedrooms, PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, "vacantDwellingsRoom" + bedrooms));
-        }
+            List<String> sourceTypes = expandCounts(typeCounts);
+            List<String> yearCategories = expandCounts(yearCounts);
 
-//        probVacantBuildingSize = new HashMap<>();
-//        for (int year : PropertiesSynPop.get().main.yearBracketsDwelling){
-//            int sizeYear = year;
-//            String label = "vacantSmallDwellings" + year;
-//            probVacantBuildingSize.put(sizeYear, PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, label));
-//            sizeYear = year + 10;
-//            label = "vacantMediumDwellings" + year;
-//            probVacantBuildingSize.put(sizeYear, PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, label));
-//
-//        }
+            Collections.shuffle(sourceTypes, SiloUtil.getRandomObject());
+            Collections.shuffle(yearCategories, SiloUtil.getRandomObject());
 
-        probVacantType = new HashMap<>();
-        probVacantType.put(MunichDwellingTypes.DwellingTypeMunich.EFHFreistehend, PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, "vacantDwellingsEFHFreistehend"));
-        probVacantType.put(MunichDwellingTypes.DwellingTypeMunich.EFHDoppelhaus, PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, "vacantDwellingsEFHDoppelhaus"));
-        probVacantType.put(MunichDwellingTypes.DwellingTypeMunich.EFHReihenhaus, PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, "vacantDwellingsEFHReihenhaus"));
-        probVacantType.put(MunichDwellingTypes.DwellingTypeMunich.MFH, PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality, "vacantDwellingsMFH"));
+            if (sourceTypes.size() != targetVacant || yearCategories.size() != targetVacant) {
+                throw new IllegalStateException(
+                        "Vacant marginal expansion failed for municipality " + municipality
+                );
+            }
 
-//        ddTypeProbOfSFAorSFD = PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality,"ddProbSFAorSFD");
-//        ddTypeProbOfMF234orMF5plus = PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality,"ddProbMF234orMF5plus");
-//        ddTypeProbOfEFHFreistehend = PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality,"ddProbEFHFreistehend");
-//        ddTypeProbOfEFHDoppelhaus = PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality,"ddProbEFHDoppelhaus");
-//        ddTypeProbOfEFHReihenhaus = PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality,"ddProbEFHReihenhaus");
-//        ddTypeProbOfMFH = PropertiesSynPop.get().main.marginalsMunicipality.getIndexedValueAt(municipality,"ddProbMFH");
+            int generated = 0;
 
-        probabilityTAZ = new double[dataSetSynPop.getProbabilityZone().get(municipality).keySet().size()];
-        sumTAZs = 0;
-        probabilityTAZ = dataSetSynPop.getProbabilityZone().get(municipality).values().stream().mapToDouble(Number::doubleValue).toArray();
-        for (int i = 1; i < probabilityTAZ.length; i++){
-            probabilityTAZ[i] = probabilityTAZ[i] + probabilityTAZ[i-1];
-        }
-        idTAZs = dataSetSynPop.getProbabilityZone().get(municipality).keySet().stream().mapToInt(Number::intValue).toArray();
-    }
+            for (int index = 0; index < targetVacant; index++) {
+                String sourceType = sourceTypes.get(index);
+                String yearCategory = yearCategories.get(index);
 
+                DwellingType type = mapSourceTypeToMunichType(municipality, sourceType);
+                int yearBuilt = sampleConstructionYear(yearCategory);
+                int tazSelected = selectZone(municipality);
 
-    private void updateQualityMap(int municipality, int year, int quality){
+                Dwelling donor = selectOccupiedDonor(municipality, type, yearBuilt);
+                int floorSpace = donor != null && donor.getFloorSpace() > 0
+                        ? donor.getFloorSpace()
+                        : defaultFloorSpace(type);
 
-        int yearBracket = microDataManager.dwellingYearBracket(year);
-        int key = yearBracket * 10000000 + municipality;
-        if (ddQuality != null) {
-            if (ddQuality.get(key) != null) {
-                Map<Integer, Float> qualities = ddQuality.get(key);
-                if (qualities.get(quality) != null) {
-                    float prev = 1 + qualities.get(quality);
-                    qualities.put(quality, prev);
-                } else {
-                    qualities.put(quality, 1f);
+                int bedrooms = donor != null && donor.getBedrooms() >= 0
+                        ? donor.getBedrooms()
+                        : microDataManager.guessBedrooms(floorSpace);
+
+                int quality = selectQualityVacant(municipality, yearBuilt);
+
+                Map<MunichDwellingTypes.DwellingTypeMunich, Integer> zonePrices =
+                        dataSetSynPop.getDwellingPriceByTypeAndZone().get(tazSelected);
+
+                if (zonePrices == null || zonePrices.get(type) == null) {
+                    throw new IllegalStateException(
+                            "No dwelling price found for zone=" + tazSelected + ", type=" + type
+                    );
                 }
-                ddQuality.put(key, qualities);
-            } else {
-                Map<Integer, Float> qualities = new HashMap<>();
-                qualities.put(quality, 1f);
-                ddQuality.put(key, qualities);
+
+                int groundPrice = zonePrices.get(type);
+                int price = microDataManager.guessPrice(
+                        groundPrice,
+                        quality,
+                        floorSpace,
+                        DwellingUsage.VACANT
+                );
+
+                int newDwellingId = ++highestDwellingIdInUse;
+                Dwelling dwelling = DwellingUtils.getFactory().createDwelling(
+                        newDwellingId,
+                        tazSelected,
+                        null,
+                        -1,
+                        type,
+                        bedrooms,
+                        quality,
+                        price,
+                        yearBuilt
+                );
+
+                dwelling.setUsage(DwellingUsage.VACANT);
+                dwelling.setFloorSpace(floorSpace);
+
+                populateVacantDwellingAttributes(
+                        dwelling,
+                        donor,
+                        yearBuilt,
+                        floorSpace,
+                        bedrooms,
+                        price,
+                        sourceType,
+                        yearCategory
+                );
+
+                realEstateData.addDwelling(dwelling);
+                generated++;
             }
-        } else {
-            ddQuality = new HashMap<>();
-            Map<Integer, Float> qualities = new HashMap<>();
-            qualities.put(quality, 1f);
-            ddQuality.put(key, qualities);
+
+            logger.info(
+                    "Municipality {}. Target vacant dwellings: {}, generated: {}, type counts: {}, year counts: {}",
+                    municipality,
+                    targetVacant,
+                    generated,
+                    typeCounts,
+                    yearCounts
+            );
         }
     }
 
+    private static final String[] VACANT_DONOR_ATTRIBUTES = {
+            "d.buildingSize",
+            "d.heating.district",
+            "d.numberOfHeatingTypes",
+            "d.heating.stoves",
+            "d.heatingEnergy",
+            "d.heating.central",
+            "d.heating.floor",
+            "d.numberOfApartments",
+            "d.buildingUsage"
+    };
 
-    private int[] selectMultipleTAZ(int selections){
+    private void populateVacantDwellingAttributes(
+            Dwelling dwelling,
+            Dwelling donor,
+            int yearBuilt,
+            int floorSpace,
+            int bedrooms,
+            int price,
+            String sourceType,
+            String yearCategory
+    ) {
 
-        int[] selected;
-        selected = new int[selections];
-        int completed = 0;
-        for (int iteration = 0; iteration < 100; iteration++){
-            int m = selections - completed;
-            double[] randomChoices = new double[m];
-            for (int k = 0; k < randomChoices.length; k++) {
-                randomChoices[k] = SiloUtil.getRandomNumberAsDouble();
+        /*
+         * Copy building/heating characteristics from the occupied donor.
+         */
+        if (donor != null) {
+            for (String attribute : VACANT_DONOR_ATTRIBUTES) {
+                donor.getAttribute(attribute)
+                        .ifPresent(value ->
+                                dwelling.setAttribute(attribute, value)
+                        );
             }
-            Arrays.sort(randomChoices);
 
-            int p = 0;
-            double cumulative = probabilityTAZ[p];
-            for (double randomNumber : randomChoices){
-                while (randomNumber > cumulative && p < probabilityTAZ.length - 1) {
-                    p++;
-                    cumulative += probabilityTAZ[p];
-                }
-                if (probabilityTAZ[p] > 0) {
-                    selected[completed] = idTAZs[p];
-                    completed++;
-                }
+            /*
+             * Copy the original microdata dwelling-type code only when the
+             * donor has the same final SILO/Munich dwelling type.
+             */
+            if (donor.getType().equals(dwelling.getType())) {
+                donor.getAttribute("d.type")
+                        .ifPresent(value ->
+                                dwelling.setAttribute("d.type", value)
+                        );
             }
         }
-        return selected;
+
+        /*
+         * Attributes controlled or generated by the vacant module.
+         */
+        dwelling.setAttribute(
+                "d.year",
+                microDataManager.dwellingYearBracket(yearBuilt)
+        );
+
+        /*
+         * Microcensus code 5 means vacant.
+         */
+        dwelling.setAttribute("d.use", 5);
+
+        dwelling.setAttribute("d.space", floorSpace);
+
+        /*
+         * In your occupied generation:
+         * bedrooms = numberOfRooms - 1.
+         * Therefore the reverse approximation is bedrooms + 1.
+         */
+        dwelling.setAttribute(
+                "d.numberOfRooms",
+                Math.max(1, bedrooms + 1)
+        );
+
+        dwelling.setAttribute("d.totalRent", price);
+
+        float estimatedRentPerSquareMetre = 0f;
+
+        if (floorSpace > 0) {
+            /*
+             * guessPrice() adds 150 euros of ancillary costs.
+             * Remove it before deriving approximate rent per square metre.
+             */
+            estimatedRentPerSquareMetre =
+                    Math.max(0, price - 150) /
+                            (float) floorSpace;
+        }
+
+        dwelling.setAttribute(
+                "d.rent",
+                estimatedRentPerSquareMetre
+        );
+
+        dwelling.setAttribute(
+                "sourceVacantType",
+                sourceType
+        );
+
+        dwelling.setAttribute(
+                "sourceVacantYearCategory",
+                yearCategory
+        );
     }
 
+    /**
+     * Reconciles detailed marginals to d.vacant and converts them to integer counts.
+     * The relative category structure is preserved; the final sum equals targetTotal exactly.
+     */
+    private Map<String, Integer> normalizeMarginalCounts(
+            int municipality,
+            String[] columns,
+            int targetTotal,
+            String marginalName
+    ) {
+        Map<String, Double> rawValues = new LinkedHashMap<>();
+        double rawSum = 0.0;
 
-    private int extractYear(int buildingYear){
-
-        int year = 0;
-        if (buildingYear < 10){
-            year = buildingYear;
-        } else {
-            year = buildingYear - 10;
-        }
-        return year;
-    }
-
-
-    private DwellingType extractDwellingType (int buildingYear, float ddType1Prob, float ddType3Prob){
-
-        DwellingType type = DefaultDwellingTypes.DefaultDwellingTypeImpl.MF234;
-
-        if (buildingYear < 10){
-            if (SiloUtil.getRandomNumberAsFloat() < ddType1Prob){
-                type = DefaultDwellingTypes.DefaultDwellingTypeImpl.SFD;
-            } else {
-                type = DefaultDwellingTypes.DefaultDwellingTypeImpl.SFA;
+        for (String column : columns) {
+            double value = getMarginal(municipality, column);
+            if (!Double.isFinite(value) || value < 0.0) {
+                logger.warn(
+                        "Municipality {}: invalid {} value in {} changed to zero: {}",
+                        municipality,
+                        marginalName,
+                        column,
+                        value
+                );
+                value = 0.0;
             }
-        } else {
-            if (SiloUtil.getRandomNumberAsFloat() < ddType3Prob){
-                type = DefaultDwellingTypes.DefaultDwellingTypeImpl.MF5plus;
-            }
+            rawValues.put(column, value);
+            rawSum += value;
         }
 
-
-        return type;
-    }
-
-
-    private int selectQualityVacant(int municipality, int year){
-        int result = 0;
-        if (ddQuality.get(year * 10000000 + municipality) == null) {
-            HashMap<Integer, Float> qualities = new HashMap<>();
-            for (int quality = 1; quality <= PropertiesSynPop.get().main.numberofQualityLevels; quality++){
-                qualities.put(quality, 1f);
+        if (targetTotal == 0) {
+            Map<String, Integer> zeros = new LinkedHashMap<>();
+            for (String column : columns) {
+                zeros.put(column, 0);
             }
-            ddQuality.put(year * 10000000 + municipality, qualities);
+            return zeros;
         }
-        result = SiloUtil.select(ddQuality.get(year * 10000000 + municipality));
+
+        if (rawSum <= 0.0) {
+            throw new IllegalStateException(
+                    "Municipality " + municipality + ": d.vacant=" + targetTotal +
+                            " but all " + marginalName + " values are zero."
+            );
+        }
+
+        double relativeGap = Math.abs(rawSum - targetTotal) / Math.max(1.0, targetTotal);
+        if (relativeGap > LARGE_WARNING_RELATIVE_GAP) {
+
+            logger.warn(
+                    "Municipality {}: LARGE difference between {} sum and d.vacant. " +
+                            "target={}, rawSum={}, relativeGap={}%. " +
+                            "Generation will continue and detailed counts will be rescaled to d.vacant.",
+                    municipality,
+                    marginalName,
+                    targetTotal,
+                    rawSum,
+                    relativeGap * 100.0
+            );
+
+        } else if (relativeGap > WARNING_RELATIVE_GAP) {
+
+            logger.warn(
+                    "Municipality {}: {} sum differs from d.vacant. " +
+                            "target={}, rawSum={}, relativeGap={}%. " +
+                            "Detailed counts will be rescaled to d.vacant.",
+                    municipality,
+                    marginalName,
+                    targetTotal,
+                    rawSum,
+                    relativeGap * 100.0
+            );
+        }
+
+        Map<String, Integer> result = new LinkedHashMap<>();
+        Map<String, Double> remainders = new LinkedHashMap<>();
+        int floorSum = 0;
+
+        for (String column : columns) {
+            double scaled = rawValues.get(column) / rawSum * targetTotal;
+            int floor = (int) Math.floor(scaled);
+            result.put(column, floor);
+            remainders.put(column, scaled - floor);
+            floorSum += floor;
+        }
+
+        int remaining = targetTotal - floorSum;
+        List<String> order = new ArrayList<>(List.of(columns));
+        Map<String, Integer> originalOrder = new HashMap<>();
+        for (int i = 0; i < columns.length; i++) {
+            originalOrder.put(columns[i], i);
+        }
+
+        order.sort(
+                Comparator
+                        .comparingDouble((String column) -> remainders.get(column))
+                        .reversed()
+                        .thenComparingInt(originalOrder::get)
+        );
+
+        for (int i = 0; i < remaining; i++) {
+            String column = order.get(i % order.size());
+            result.put(column, result.get(column) + 1);
+        }
+
+        int finalSum = result.values().stream().mapToInt(Integer::intValue).sum();
+        if (finalSum != targetTotal) {
+            throw new IllegalStateException(
+                    "Internal integerization error for municipality " + municipality +
+                            ": expected=" + targetTotal + ", actual=" + finalSum
+            );
+        }
+
         return result;
     }
 
+    private List<String> expandCounts(Map<String, Integer> counts) {
+        List<String> result = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+            for (int i = 0; i < entry.getValue(); i++) {
+                result.add(entry.getKey());
+            }
+        }
+        return result;
+    }
 
+    /**
+     * Mapping to the four current Munich dwelling types.
+     * All two-or-more-dwelling categories are mapped to MFH.
+     */
+    private DwellingType mapSourceTypeToMunichType(int municipality, String sourceType) {
+        return switch (sourceType) {
+            case "d.vacant.type.detached1Dwelling" ->
+                    MunichDwellingTypes.DwellingTypeMunich.EFHFreistehend;
+
+            case "d.vacant.type.semiDetached1Dwelling" ->
+                    MunichDwellingTypes.DwellingTypeMunich.EFHDoppelhaus;
+
+            case "d.vacant.type.terraced1Dwelling" ->
+                    MunichDwellingTypes.DwellingTypeMunich.EFHReihenhaus;
+
+            case "d.vacant.type.detached2Dwelling",
+                 "d.vacant.type.semiDetached2Dwelling",
+                 "d.vacant.type.terraced2Dwelling",
+                 "d.vacant.type.MFH3to6Dwelling",
+                 "d.vacant.type.MFH7to12Dwelling",
+                 "d.vacant.type.MFH13OrMoreDwelling" ->
+                    MunichDwellingTypes.DwellingTypeMunich.MFH;
+
+            case "d.vacant.type.other" -> sampleOccupiedType(municipality);
+
+            default -> throw new IllegalArgumentException(
+                    "Unknown vacant dwelling type column: " + sourceType
+            );
+        };
+    }
+
+    private DwellingType sampleOccupiedType(int municipality) {
+        Map<DwellingType, Integer> counts = occupiedTypeCounts.get(municipality);
+        if (counts == null || counts.isEmpty()) {
+            return MunichDwellingTypes.DwellingTypeMunich.MFH;
+        }
+
+        int total = counts.values().stream().mapToInt(Integer::intValue).sum();
+        if (total <= 0) {
+            return MunichDwellingTypes.DwellingTypeMunich.MFH;
+        }
+
+        int draw = SiloUtil.getRandomObject().nextInt(total);
+        int cumulative = 0;
+        for (Map.Entry<DwellingType, Integer> entry : counts.entrySet()) {
+            cumulative += entry.getValue();
+            if (draw < cumulative) {
+                return entry.getKey();
+            }
+        }
+
+        return MunichDwellingTypes.DwellingTypeMunich.MFH;
+    }
+
+    private int sampleConstructionYear(String category) {
+        return switch (category) {
+            case "d.vacant.year.before1950" -> randomIntInclusive(1900, 1949);
+            case "d.vacant.year.1950to1969" -> randomIntInclusive(1950, 1969);
+            case "d.vacant.year.1970to1989" -> randomIntInclusive(1970, 1989);
+            case "d.vacant.year.1990to2009" -> randomIntInclusive(1990, 2009);
+            case "d.vacant.year.2010AndLater" -> randomIntInclusive(2010, BASE_YEAR);
+            default -> throw new IllegalArgumentException(
+                    "Unknown vacant construction-year category: " + category
+            );
+        };
+    }
+
+    private int randomIntInclusive(int minimum, int maximum) {
+        if (maximum <= minimum) {
+            return minimum;
+        }
+        return minimum + SiloUtil.getRandomObject().nextInt(maximum - minimum + 1);
+    }
+
+    private int selectZone(int municipality) {
+        Map<Integer, Float> zoneWeights = dataSetSynPop.getProbabilityZone().get(municipality);
+        if (zoneWeights == null || zoneWeights.isEmpty()) {
+            throw new IllegalStateException(
+                    "No TAZ probabilities found for municipality " + municipality
+            );
+        }
+
+        double total = 0.0;
+        for (float weight : zoneWeights.values()) {
+            total += Math.max(0.0, weight);
+        }
+
+        if (total <= 0.0) {
+            throw new IllegalStateException(
+                    "TAZ probability sum is zero for municipality " + municipality
+            );
+        }
+
+        double draw = SiloUtil.getRandomNumberAsDouble() * total;
+        double cumulative = 0.0;
+        int fallbackZone = zoneWeights.keySet().iterator().next();
+
+        for (Map.Entry<Integer, Float> entry : zoneWeights.entrySet()) {
+            fallbackZone = entry.getKey();
+            cumulative += Math.max(0.0, entry.getValue());
+            if (draw <= cumulative) {
+                return entry.getKey();
+            }
+        }
+
+        return fallbackZone;
+    }
+
+    private Dwelling selectOccupiedDonor(int municipality, DwellingType type, int yearBuilt) {
+        int yearBracket = microDataManager.dwellingYearBracket(yearBuilt);
+
+        Map<DwellingType, Map<Integer, List<Dwelling>>> byTypeAndYear = donorsExact.get(municipality);
+        if (byTypeAndYear != null) {
+            Map<Integer, List<Dwelling>> byYear = byTypeAndYear.get(type);
+            if (byYear != null) {
+                Dwelling donor = randomElement(byYear.get(yearBracket));
+                if (donor != null) {
+                    return donor;
+                }
+            }
+        }
+
+        Map<DwellingType, List<Dwelling>> byType = donorsByType.get(municipality);
+        if (byType != null) {
+            Dwelling donor = randomElement(byType.get(type));
+            if (donor != null) {
+                return donor;
+            }
+        }
+
+        Dwelling donor = randomElement(donorsByMunicipality.get(municipality));
+        if (donor != null) {
+            return donor;
+        }
+
+        return randomElement(allOccupiedDonors);
+    }
+
+    private Dwelling randomElement(List<Dwelling> list) {
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        return list.get(SiloUtil.getRandomObject().nextInt(list.size()));
+    }
+
+    private int defaultFloorSpace(DwellingType type) {
+        if (type.equals(MunichDwellingTypes.DwellingTypeMunich.EFHFreistehend)) {
+            return 120;
+        }
+        if (type.equals(MunichDwellingTypes.DwellingTypeMunich.EFHDoppelhaus)) {
+            return 105;
+        }
+        if (type.equals(MunichDwellingTypes.DwellingTypeMunich.EFHReihenhaus)) {
+            return 95;
+        }
+        return 75;
+    }
+
+    private void updateQualityMap(int municipality, int yearBuilt, int quality) {
+        int yearBracket = microDataManager.dwellingYearBracket(yearBuilt);
+        int key = yearBracket * 10_000_000 + municipality;
+
+        ddQuality
+                .computeIfAbsent(key, ignored -> new HashMap<>())
+                .merge(quality, 1f, Float::sum);
+    }
+
+    private int selectQualityVacant(int municipality, int yearBuilt) {
+        int yearBracket = microDataManager.dwellingYearBracket(yearBuilt);
+        int key = yearBracket * 10_000_000 + municipality;
+
+        Map<Integer, Float> qualities = ddQuality.get(key);
+        if (qualities == null || qualities.isEmpty()) {
+            qualities = new HashMap<>();
+            for (int quality = 1;
+                 quality <= PropertiesSynPop.get().main.numberofQualityLevels;
+                 quality++) {
+                qualities.put(quality, 1f);
+            }
+            ddQuality.put(key, qualities);
+        }
+
+        return SiloUtil.select(qualities);
+    }
+
+    private float getMarginal(int municipality, String column) {
+        return PropertiesSynPop.get().main.marginalsMunicipality
+                .getIndexedValueAt(municipality, column);
+    }
 }

@@ -6,6 +6,7 @@ import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.locationtech.jts.geom.Coordinate;
+import de.tum.bgu.msm.data.dwelling.DwellingUsage;
 
 import java.io.PrintWriter;
 import java.util.Collection;
@@ -45,6 +46,8 @@ public class DwellingWriterMuc implements DwellingWriter {
         pwd.print(",d.heating.floor");
         pwd.print(",d.numberOfApartments");
         pwd.print(",d.buildingUsage");
+        pwd.print(",sourceVacantType");
+        pwd.print(",sourceVacantYearCategory");
 
         pwd.println();
 
@@ -106,7 +109,13 @@ public class DwellingWriterMuc implements DwellingWriter {
             pwd.print(getDwellingAttributeOrDefault(dd, "d.numberOfHeatingTypes", "0"));
 
             pwd.print(",");
-            pwd.print(getDwellingAttributeOrDefault(dd, "d.use", "0"));
+            pwd.print(
+                    getDwellingAttributeOrDefault(
+                            dd,
+                            "d.use",
+                            dwellingUsageToMicroCode(dd.getUsage())
+                    )
+            );
 
             pwd.print(",");
             pwd.print(getDwellingAttributeOrDefault(dd, "d.heating.stoves", "0"));
@@ -115,10 +124,24 @@ public class DwellingWriterMuc implements DwellingWriter {
             pwd.print(getDwellingAttributeOrDefault(dd, "d.space", "0"));
 
             pwd.print(",");
-            pwd.print(getDwellingAttributeOrDefault(dd, "d.numberOfRooms", "0"));
+            pwd.print(
+                    getDwellingAttributeOrDefault(
+                            dd,
+                            "d.numberOfRooms",
+                            Integer.toString(
+                                    Math.max(1, dd.getBedrooms() + 1)
+                            )
+                    )
+            );
 
             pwd.print(",");
-            pwd.print(getDwellingAttributeOrDefault(dd, "d.totalRent", "0"));
+            pwd.print(
+                    getDwellingAttributeOrDefault(
+                            dd,
+                            "d.totalRent",
+                            Integer.toString(dd.getPrice())
+                    )
+            );
 
             pwd.print(",");
             pwd.print(getDwellingAttributeOrDefault(dd, "d.heatingEnergy", "0"));
@@ -135,6 +158,24 @@ public class DwellingWriterMuc implements DwellingWriter {
             pwd.print(",");
             pwd.print(getDwellingAttributeOrDefault(dd, "d.buildingUsage", "0"));
 
+            pwd.print(",");
+            pwd.print(
+                    getDwellingAttributeOrDefault(
+                            dd,
+                            "sourceVacantType",
+                            ""
+                    )
+            );
+
+            pwd.print(",");
+            pwd.print(
+                    getDwellingAttributeOrDefault(
+                            dd,
+                            "sourceVacantYearCategory",
+                            ""
+                    )
+            );
+
             pwd.println();
 
             if (dd.getId() == SiloUtil.trackDd) {
@@ -150,5 +191,23 @@ public class DwellingWriterMuc implements DwellingWriter {
         return dwelling.getAttribute(key)
                 .map(Object::toString)
                 .orElse(defaultValue);
+    }
+
+    private String dwellingUsageToMicroCode(
+            DwellingUsage usage
+    ) {
+        if (usage == DwellingUsage.VACANT) {
+            return "5";
+        }
+
+        if (usage == DwellingUsage.RENTED) {
+            return "3";
+        }
+
+        if (usage == DwellingUsage.OWNED) {
+            return "1";
+        }
+
+        return "0";
     }
 }
