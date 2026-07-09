@@ -99,7 +99,7 @@ public class GenerateHouseholdsPersonsDwellings {
                 int hhSelected = hhSelection[draw];
                 int tazSelected = selectTAZ();
 
-                Household household = generateHousehold(hhSelected);
+                Household household = generateHousehold(hhSelected, municipality);
 
                 generateDwelling(
                         hhSelected,
@@ -110,7 +110,9 @@ public class GenerateHouseholdsPersonsDwellings {
 
                 generatePersons(
                         hhSelected,
-                        household
+                        household,
+                        tazSelected,
+                        municipality
                 );
             }
 
@@ -121,12 +123,14 @@ public class GenerateHouseholdsPersonsDwellings {
     }
 
 
-    private Household generateHousehold(int hhSelected) {
+    private Household generateHousehold(int hhSelected, int municipality) {
 
         HouseholdFactory factory = householdData.getHouseholdFactory();
         int id = householdData.getNextHouseholdId();
 
         Household household = factory.createHousehold(id, id, 0);
+
+        household.setAttribute("municipality", municipality);
 
         copyHouseholdMicroAttributes(household, hhSelected);
 
@@ -186,7 +190,12 @@ public class GenerateHouseholdsPersonsDwellings {
 //        }
 //    }
 
-    private void generatePersons(int hhSelected, Household hh){
+    private void generatePersons(
+            int hhSelected,
+            Household hh,
+            int tazSelected,
+            int municipality
+    ){
 
         int hhSize = Math.round(
                 dataSetSynPop.getHouseholdDataSet().getValueAt(hhSelected, "h.size")
@@ -241,6 +250,9 @@ public class GenerateHouseholdsPersonsDwellings {
                     0,
                     income
             );
+
+            pers.setAttribute("zone", tazSelected);
+            pers.setAttribute("municipality", municipality);
 
             copyPersonMicroAttributes(pers, personSelected);
 
@@ -451,6 +463,8 @@ public class GenerateHouseholdsPersonsDwellings {
                 price,
                 year
         );
+
+        dwell.setAttribute("municipality", municipality);
 
         copyDwellingMicroAttributes(dwell, hhSelected);
 

@@ -10,6 +10,7 @@ import de.tum.bgu.msm.data.dwelling.DwellingUsage;
 
 import java.io.PrintWriter;
 import java.util.Collection;
+import java.util.Optional;
 
 public class DwellingWriterMuc implements DwellingWriter {
     private final static Logger logger = LogManager.getLogger(DwellingWriterMuc.class);
@@ -28,7 +29,7 @@ public class DwellingWriterMuc implements DwellingWriter {
 
         PrintWriter pwd = SiloUtil.openFileForSequentialWriting(path, false);
 
-        pwd.print("id,zone,hhId,type,bedrooms,quality,monthlyCost,year,coordX,coordY");
+        pwd.print("id,zone,municipality,hhId,type,bedrooms,quality,monthlyCost,year,coordX,coordY");
 
         pwd.print(",d.buildingSize");
         pwd.print(",d.rent");
@@ -57,6 +58,9 @@ public class DwellingWriterMuc implements DwellingWriter {
             pwd.print(",");
 
             pwd.print(dd.getZoneId());
+            pwd.print(",");
+
+            pwd.print(getDwellingAttributeOrDefault(dd, "municipality", "-1"));
             pwd.print(",");
 
             pwd.print(dd.getResidentId());
@@ -188,9 +192,19 @@ public class DwellingWriterMuc implements DwellingWriter {
     }
 
     private String getDwellingAttributeOrDefault(Dwelling dwelling, String key, String defaultValue) {
-        return dwelling.getAttribute(key)
-                .map(Object::toString)
-                .orElse(defaultValue);
+
+        Object value = dwelling.getAttribute(key);
+
+        if (value == null) {
+            return defaultValue;
+        }
+
+        if (value instanceof Optional) {
+            Optional<?> optionalValue = (Optional<?>) value;
+            return optionalValue.map(Object::toString).orElse(defaultValue);
+        }
+
+        return value.toString();
     }
 
     private String dwellingUsageToMicroCode(

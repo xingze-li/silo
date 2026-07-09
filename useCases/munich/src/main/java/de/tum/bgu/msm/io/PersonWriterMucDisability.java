@@ -10,6 +10,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.PrintWriter;
+import java.util.Optional;
 
 public class PersonWriterMucDisability implements PersonWriter {
 
@@ -28,7 +29,7 @@ public class PersonWriterMucDisability implements PersonWriter {
 
         PrintWriter pwp = SiloUtil.openFileForSequentialWriting(path, false);
 
-        pwp.print("id,hhid,age,gender,relationShip,occupation,driversLicense,workplace,income");
+        pwp.print("id,hhid,zone,municipality,age,gender,relationShip,occupation,driversLicense,workplace,income");
         pwp.print(",nationality");
         pwp.print(",disability");
         pwp.print(",schoolType");
@@ -66,6 +67,12 @@ public class PersonWriterMucDisability implements PersonWriter {
             pwp.print(",");
 
             pwp.print(pp.getHousehold().getId());
+            pwp.print(",");
+
+            pwp.print(getAttributeOrDefault(pp, "zone", "-1"));
+            pwp.print(",");
+
+            pwp.print(getAttributeOrDefault(pp, "municipality", "-1"));
             pwp.print(",");
 
             pwp.print(pp.getAge());
@@ -179,10 +186,20 @@ public class PersonWriterMucDisability implements PersonWriter {
         pwp.close();
     }
 
-    private String getAttributeOrDefault(Person pp, String key, String defaultValue) {
-        return pp.getAttribute(key)
-                .map(Object::toString)
-                .orElse(defaultValue);
+    private String getAttributeOrDefault(Person person, String key, String defaultValue) {
+
+        Object value = person.getAttribute(key);
+
+        if (value == null) {
+            return defaultValue;
+        }
+
+        if (value instanceof Optional) {
+            Optional<?> optionalValue = (Optional<?>) value;
+            return optionalValue.map(Object::toString).orElse(defaultValue);
+        }
+
+        return value.toString();
     }
 
     private String getNationalityOrDefault(Person pp) {
