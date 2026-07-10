@@ -117,7 +117,7 @@ public class ReadZonalData {
             zoneAttributes = PropertiesSynPop.get().main.cellsMatrixBoroughs;
         }
         for (int i = 1; i <= zoneAttributes.getRowCount(); i++){
-            int city = (int) zoneAttributes.getValueAt(i,"ID_borough");
+            int city = (int) zoneAttributes.getValueAt(i,"ID_city");
             int taz = (int) zoneAttributes.getValueAt(i,"ID_cell");
             float probability = zoneAttributes.getValueAt(i, "population");
             int priceEFHFreistehend = (int) zoneAttributes.getValueAt(i,"ddEFHFreistehend");
