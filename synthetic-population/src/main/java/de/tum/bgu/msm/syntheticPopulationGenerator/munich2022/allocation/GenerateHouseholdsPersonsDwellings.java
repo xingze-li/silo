@@ -239,8 +239,26 @@ public class GenerateHouseholdsPersonsDwellings {
                     dataSetSynPop.getPersonDataSet().getValueAt(personSelected, "p.education")
             );
 
-            PersonRole personRole = microDataManager.translatePersonRole(
-                    Math.round(dataSetSynPop.getPersonDataSet().getValueAt(personSelected, "p.householdRole"))
+            int householdRole = Math.round(
+                    dataSetSynPop.getPersonDataSet()
+                            .getValueAt(personSelected, "p.householdRole")
+            );
+
+            int partnerInHousehold = Math.round(
+                    dataSetSynPop.getPersonDataSet()
+                            .getValueAt(personSelected, "p.partnerInHousehold")
+            );
+
+            int maritalStatus = Math.round(
+                    dataSetSynPop.getPersonDataSet()
+                            .getValueAt(personSelected, "p.maritalStatus")
+            );
+
+            PersonRole personRole = microDataManager.determinePersonRole(
+                    householdRole,
+                    age,
+                    partnerInHousehold,
+                    maritalStatus
             );
 
             PersonMuc pers = (PersonMuc) factory.createPerson(

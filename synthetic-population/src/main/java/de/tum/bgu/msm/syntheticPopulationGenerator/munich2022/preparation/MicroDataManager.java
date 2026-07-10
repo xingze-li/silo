@@ -382,6 +382,60 @@ public class MicroDataManager {
         return personRole;
     }
 
+    public PersonRole determinePersonRole(
+            int householdRole,
+            int age,
+            int partnerInHousehold,
+            int maritalStatus
+    ) {
+        boolean hasPartnerInHousehold =
+                partnerInHousehold == 1 ||
+                        partnerInHousehold == 2;
+
+        boolean marriedByStatus =
+                maritalStatus == 2 ||
+                        maritalStatus == 5;
+
+        return switch (householdRole) {
+
+            /*
+             * Household head / reference person.
+             */
+            case 1 -> {
+                if (hasPartnerInHousehold || marriedByStatus) {
+                    yield PersonRole.MARRIED;
+                } else {
+                    yield PersonRole.SINGLE;
+                }
+            }
+
+            /*
+             * Partner / spouse.
+             */
+            case 2 -> PersonRole.MARRIED;
+
+            /*
+             * Child.
+             */
+            case 3 -> PersonRole.CHILD;
+
+            /*
+             * Other household member.
+             */
+            case 4 -> {
+                if (hasPartnerInHousehold || marriedByStatus) {
+                    yield PersonRole.MARRIED;
+                } else if (age >= 0 && age < 18) {
+                    yield PersonRole.CHILD;
+                } else {
+                    yield PersonRole.SINGLE;
+                }
+            }
+
+            default -> PersonRole.SINGLE;
+        };
+    }
+
     public static boolean obtainLicense(Gender gender, int age){
         boolean license = false;
         int row = 1;
