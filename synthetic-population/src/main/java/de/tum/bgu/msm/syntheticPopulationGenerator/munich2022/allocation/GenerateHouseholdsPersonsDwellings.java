@@ -17,6 +17,8 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 
+import static org.matsim.households.Income.IncomePeriod.year;
+
 public class GenerateHouseholdsPersonsDwellings {
 
     private static final Logger logger = LogManager.getLogger(GenerateHouseholdsPersonsDwellings.class);
@@ -371,7 +373,7 @@ public class GenerateHouseholdsPersonsDwellings {
                 dataSetSynPop.getDwellingDataSet().getValueAt(hhSelected, "d.year")
         );
 
-        int year = microDataManager.dwellingYearfromBracket(yearBracket);
+        int yearBuilt = microDataManager.dwellingYearfromBracket(yearBracket);
 
         int floorSpace = Math.round(
                 dataSetSynPop.getDwellingDataSet().getValueAt(hhSelected, "d.space")
@@ -461,7 +463,7 @@ public class GenerateHouseholdsPersonsDwellings {
                 bedRooms,
                 quality,
                 price,
-                year
+                yearBuilt
         );
 
         dwell.setAttribute("municipality", municipality);
