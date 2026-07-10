@@ -178,10 +178,9 @@ public class AssignSchools {
             return 0f;
         }
 
-        // 如果 distance matrix 是米，使用这一行
+        // if distance is m
         int distanceKm = Math.round(distance / 1000f);
 
-        // 如果 distance matrix 已经是 km，改成：
         // int distanceKm = Math.round(distance);
 
         Map<Integer, Float> utilityMapTertiary =

@@ -12,6 +12,7 @@ import org.apache.logging.log4j.Logger;
 
 
 import java.io.PrintWriter;
+import java.util.Optional;
 
 public class HouseholdWriterMucDisability implements HouseholdWriter {
 
@@ -32,7 +33,7 @@ public class HouseholdWriterMucDisability implements HouseholdWriter {
 
         PrintWriter pwh = SiloUtil.openFileForSequentialWriting(path, false);
 
-        pwh.print("id,dwelling,hhSize,zone,autos");
+        pwh.print("id,dwelling,hhSize,zone,municipality,autos");
         pwh.print(",personCount");
         pwh.print(",h.size");
         pwh.print(",h.type");
@@ -65,6 +66,9 @@ public class HouseholdWriterMucDisability implements HouseholdWriter {
             pwh.print(zoneId);
             pwh.print(",");
 
+            pwh.print(getHouseholdAttributeOrDefault(hh, "municipality", "-1"));
+            pwh.print(",");
+
             pwh.print(hh.getVehicles().stream()
                     .filter(vv -> vv.getType().equals(VehicleType.CAR))
                     .count());
@@ -87,9 +91,19 @@ public class HouseholdWriterMucDisability implements HouseholdWriter {
         pwh.close();
     }
 
-    private String getHouseholdAttributeOrDefault(Household hh, String attributeName, String defaultValue) {
-        return hh.getAttribute(attributeName)
-                .map(Object::toString)
-                .orElse(defaultValue);
+    private String getHouseholdAttributeOrDefault(Household household, String key, String defaultValue) {
+
+        Object value = household.getAttribute(key);
+
+        if (value == null) {
+            return defaultValue;
+        }
+
+        if (value instanceof Optional) {
+            Optional<?> optionalValue = (Optional<?>) value;
+            return optionalValue.map(Object::toString).orElse(defaultValue);
+        }
+
+        return value.toString();
     }
 }

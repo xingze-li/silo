@@ -5,6 +5,8 @@ import de.tum.bgu.msm.container.DataContainer;
 import de.tum.bgu.msm.data.dwelling.RealEstateDataManager;
 import de.tum.bgu.msm.data.household.Household;
 import de.tum.bgu.msm.data.job.JobDataManager;
+import de.tum.bgu.msm.data.job.Job;
+
 import de.tum.bgu.msm.data.person.Occupation;
 import de.tum.bgu.msm.data.person.Person;
 import de.tum.bgu.msm.data.person.PersonMuc;
@@ -19,6 +21,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class ValidateTripLengthDistribution {
 
@@ -43,13 +47,62 @@ public class ValidateTripLengthDistribution {
     }
 
 
-    private void summarizeCommutersTripLength(){
-        ArrayList<Person> workerArrayList = obtainWorkers();
-        Frequency travelTimes = obtainWorkerFlows(workerArrayList);
-        summarizeFlows(travelTimes, "microData/interimFiles/tripLengthDistributionWork.csv");
-        SiloUtil.writeTableDataSet(municipalityODMatrix, "microData/interimFiles/odMatrixMunicipalityFinal.csv");
-        SiloUtil.writeTableDataSet(countyODMatrix, "microData/interimFiles/odMatrixCountyFinal.csv");
+//    private void summarizeCommutersTripLength(){
+//        ArrayList<Person> workerArrayList = obtainWorkers();
+//        Frequency travelTimes = obtainWorkerFlows(workerArrayList);
+//        summarizeFlows(travelTimes, "microData/interimFiles/tripLengthDistributionWork.csv");
+//        SiloUtil.writeTableDataSet(municipalityODMatrix, "microData/interimFiles/odMatrixMunicipalityFinal.csv");
+//        SiloUtil.writeTableDataSet(countyODMatrix, "microData/interimFiles/odMatrixCountyFinal.csv");
+//    }
+private void summarizeCommutersTripLength() {
+
+    ArrayList<Person> workerArrayList =
+            obtainWorkers();
+
+    /*
+     * Keep the total work trip-length distribution.
+     */
+    Frequency allWorkDistances =
+            obtainWorkerFlows(workerArrayList);
+
+    summarizeFlows(
+            allWorkDistances,
+            "microData/interimFiles/tripLengthDistributionWork.csv"
+    );
+
+    /*
+     * Additional work trip-length distributions by job type.
+     */
+    Map<String, Frequency> workDistancesByJobType =
+            obtainWorkerFlowsByJobType(workerArrayList);
+
+    for (Map.Entry<String, Frequency> entry :
+            workDistancesByJobType.entrySet()) {
+
+        String jobType =
+                entry.getKey();
+
+        Frequency distances =
+                entry.getValue();
+
+        summarizeFlows(
+                distances,
+                "microData/interimFiles/tripLengthDistributionWork_" +
+                        safeFileName(jobType) +
+                        ".csv"
+        );
     }
+
+    SiloUtil.writeTableDataSet(
+            municipalityODMatrix,
+            "microData/interimFiles/odMatrixMunicipalityFinal.csv"
+    );
+
+    SiloUtil.writeTableDataSet(
+            countyODMatrix,
+            "microData/interimFiles/odMatrixCountyFinal.csv"
+    );
+}
 
 
     private void summarizeStudentsTripLength() {
@@ -104,10 +157,105 @@ public class ValidateTripLengthDistribution {
 //    }
 
 
-    private Frequency obtainWorkerFlows(
+//    private Frequency obtainWorkerFlows(
+//            ArrayList<Person> workers
+//    ) {
+//        Frequency commuteDistance = new Frequency();
+//
+//        RealEstateDataManager realEstate =
+//                dataContainer.getRealEstateDataManager();
+//
+//        JobDataManager jobDataManager =
+//                dataContainer.getJobDataManager();
+//
+//        for (Person pp : workers) {
+//
+//            if (pp.getJobId() > 0) {
+//
+//                Household hh = pp.getHousehold();
+//
+//                int origin =
+//                        realEstate
+//                                .getDwelling(hh.getDwellingId())
+//                                .getZoneId();
+//
+//                int destination =
+//                        jobDataManager
+//                                .getJobFromId(pp.getJobId())
+//                                .getZoneId();
+//
+//                int distance =
+//                        (int) dataSetSynPop
+//                                .getDistanceTazToTaz()
+//                                .getValueAt(origin, destination);
+//
+//                commuteDistance.addValue(distance);
+//            }
+//        }
+//
+//        return commuteDistance;
+//    }
+private Frequency obtainWorkerFlows(
+        ArrayList<Person> workers
+) {
+    Frequency commuteDistance =
+            new Frequency();
+
+    RealEstateDataManager realEstate =
+            dataContainer.getRealEstateDataManager();
+
+    JobDataManager jobDataManager =
+            dataContainer.getJobDataManager();
+
+    for (Person pp : workers) {
+
+        if (pp.getJobId() <= 0) {
+            continue;
+        }
+
+        Job job =
+                jobDataManager.getJobFromId(
+                        pp.getJobId()
+                );
+
+        if (job == null) {
+            continue;
+        }
+
+        Household hh =
+                pp.getHousehold();
+
+        int origin =
+                realEstate
+                        .getDwelling(
+                                hh.getDwellingId()
+                        )
+                        .getZoneId();
+
+        int destination =
+                job.getZoneId();
+
+        int distance =
+                Math.round(
+                        dataSetSynPop
+                                .getDistanceTazToTaz()
+                                .getValueAt(
+                                        origin,
+                                        destination
+                                )
+                );
+
+        commuteDistance.addValue(distance);
+    }
+
+    return commuteDistance;
+}
+
+    private Map<String, Frequency> obtainWorkerFlowsByJobType(
             ArrayList<Person> workers
     ) {
-        Frequency commuteDistance = new Frequency();
+        Map<String, Frequency> result =
+                new TreeMap<>();
 
         RealEstateDataManager realEstate =
                 dataContainer.getRealEstateDataManager();
@@ -117,30 +265,60 @@ public class ValidateTripLengthDistribution {
 
         for (Person pp : workers) {
 
-            if (pp.getJobId() > 0) {
-
-                Household hh = pp.getHousehold();
-
-                int origin =
-                        realEstate
-                                .getDwelling(hh.getDwellingId())
-                                .getZoneId();
-
-                int destination =
-                        jobDataManager
-                                .getJobFromId(pp.getJobId())
-                                .getZoneId();
-
-                int distance =
-                        (int) dataSetSynPop
-                                .getDistanceTazToTaz()
-                                .getValueAt(origin, destination);
-
-                commuteDistance.addValue(distance);
+            if (pp.getJobId() <= 0) {
+                continue;
             }
+
+            Job job =
+                    jobDataManager.getJobFromId(
+                            pp.getJobId()
+                    );
+
+            if (job == null) {
+                continue;
+            }
+
+            String jobType =
+                    String.valueOf(job.getType());
+
+            if (jobType == null
+                    || jobType.isBlank()
+                    || jobType.equalsIgnoreCase("null")) {
+                jobType = "UNKNOWN";
+            }
+
+            Household hh =
+                    pp.getHousehold();
+
+            int origin =
+                    realEstate
+                            .getDwelling(
+                                    hh.getDwellingId()
+                            )
+                            .getZoneId();
+
+            int destination =
+                    job.getZoneId();
+
+            int distance =
+                    Math.round(
+                            dataSetSynPop
+                                    .getDistanceTazToTaz()
+                                    .getValueAt(
+                                            origin,
+                                            destination
+                                    )
+                    );
+
+            result
+                    .computeIfAbsent(
+                            jobType,
+                            key -> new Frequency()
+                    )
+                    .addValue(distance);
         }
 
-        return commuteDistance;
+        return result;
     }
 
     private Frequency obtainStudentFlows(
@@ -250,6 +428,21 @@ public class ValidateTripLengthDistribution {
             SiloUtil.addIntegerColumnToTableDataSet(countyODMatrix, Integer.toString(county));
         }
         countyODMatrix.buildIndex(countyODMatrix.getColumnPosition("id"));
+    }
+
+    private String safeFileName(
+            String value
+    ) {
+        if (value == null || value.isBlank()) {
+            return "UNKNOWN";
+        }
+
+        return value
+                .trim()
+                .replaceAll(
+                        "[^A-Za-z0-9._-]",
+                        "_"
+                );
     }
 
 }

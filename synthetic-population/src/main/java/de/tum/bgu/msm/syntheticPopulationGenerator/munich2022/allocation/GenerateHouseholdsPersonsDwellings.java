@@ -17,6 +17,8 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 
+import static org.matsim.households.Income.IncomePeriod.year;
+
 public class GenerateHouseholdsPersonsDwellings {
 
     private static final Logger logger = LogManager.getLogger(GenerateHouseholdsPersonsDwellings.class);
@@ -99,7 +101,7 @@ public class GenerateHouseholdsPersonsDwellings {
                 int hhSelected = hhSelection[draw];
                 int tazSelected = selectTAZ();
 
-                Household household = generateHousehold(hhSelected);
+                Household household = generateHousehold(hhSelected, municipality);
 
                 generateDwelling(
                         hhSelected,
@@ -110,7 +112,9 @@ public class GenerateHouseholdsPersonsDwellings {
 
                 generatePersons(
                         hhSelected,
-                        household
+                        household,
+                        tazSelected,
+                        municipality
                 );
             }
 
@@ -121,12 +125,14 @@ public class GenerateHouseholdsPersonsDwellings {
     }
 
 
-    private Household generateHousehold(int hhSelected) {
+    private Household generateHousehold(int hhSelected, int municipality) {
 
         HouseholdFactory factory = householdData.getHouseholdFactory();
         int id = householdData.getNextHouseholdId();
 
         Household household = factory.createHousehold(id, id, 0);
+
+        household.setAttribute("municipality", municipality);
 
         copyHouseholdMicroAttributes(household, hhSelected);
 
@@ -186,7 +192,12 @@ public class GenerateHouseholdsPersonsDwellings {
 //        }
 //    }
 
-    private void generatePersons(int hhSelected, Household hh){
+    private void generatePersons(
+            int hhSelected,
+            Household hh,
+            int tazSelected,
+            int municipality
+    ){
 
         int hhSize = Math.round(
                 dataSetSynPop.getHouseholdDataSet().getValueAt(hhSelected, "h.size")
@@ -228,8 +239,26 @@ public class GenerateHouseholdsPersonsDwellings {
                     dataSetSynPop.getPersonDataSet().getValueAt(personSelected, "p.education")
             );
 
-            PersonRole personRole = microDataManager.translatePersonRole(
-                    Math.round(dataSetSynPop.getPersonDataSet().getValueAt(personSelected, "p.householdRole"))
+            int householdRole = Math.round(
+                    dataSetSynPop.getPersonDataSet()
+                            .getValueAt(personSelected, "p.householdRole")
+            );
+
+            int partnerInHousehold = Math.round(
+                    dataSetSynPop.getPersonDataSet()
+                            .getValueAt(personSelected, "p.partnerInHousehold")
+            );
+
+            int maritalStatus = Math.round(
+                    dataSetSynPop.getPersonDataSet()
+                            .getValueAt(personSelected, "p.maritalStatus")
+            );
+
+            PersonRole personRole = microDataManager.determinePersonRole(
+                    householdRole,
+                    age,
+                    partnerInHousehold,
+                    maritalStatus
             );
 
             PersonMuc pers = (PersonMuc) factory.createPerson(
@@ -241,6 +270,9 @@ public class GenerateHouseholdsPersonsDwellings {
                     0,
                     income
             );
+
+            pers.setAttribute("zone", tazSelected);
+            pers.setAttribute("municipality", municipality);
 
             copyPersonMicroAttributes(pers, personSelected);
 
@@ -359,7 +391,7 @@ public class GenerateHouseholdsPersonsDwellings {
                 dataSetSynPop.getDwellingDataSet().getValueAt(hhSelected, "d.year")
         );
 
-        int year = microDataManager.dwellingYearfromBracket(yearBracket);
+        int yearBuilt = microDataManager.dwellingYearfromBracket(yearBracket);
 
         int floorSpace = Math.round(
                 dataSetSynPop.getDwellingDataSet().getValueAt(hhSelected, "d.space")
@@ -449,8 +481,10 @@ public class GenerateHouseholdsPersonsDwellings {
                 bedRooms,
                 quality,
                 price,
-                year
+                yearBuilt
         );
+
+        dwell.setAttribute("municipality", municipality);
 
         copyDwellingMicroAttributes(dwell, hhSelected);
 

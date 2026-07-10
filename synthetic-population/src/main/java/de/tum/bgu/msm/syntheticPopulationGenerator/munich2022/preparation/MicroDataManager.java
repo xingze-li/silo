@@ -8,6 +8,7 @@ import de.tum.bgu.msm.data.dwelling.DwellingUsage;
 import de.tum.bgu.msm.data.person.Gender;
 import de.tum.bgu.msm.data.person.Nationality;
 import de.tum.bgu.msm.data.person.PersonRole;
+import de.tum.bgu.msm.properties.Properties;
 import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
 import de.tum.bgu.msm.utils.SiloUtil;
@@ -381,6 +382,60 @@ public class MicroDataManager {
         return personRole;
     }
 
+    public PersonRole determinePersonRole(
+            int householdRole,
+            int age,
+            int partnerInHousehold,
+            int maritalStatus
+    ) {
+        boolean hasPartnerInHousehold =
+                partnerInHousehold == 1 ||
+                        partnerInHousehold == 2;
+
+        boolean marriedByStatus =
+                maritalStatus == 2 ||
+                        maritalStatus == 5;
+
+        return switch (householdRole) {
+
+            /*
+             * Household head / reference person.
+             */
+            case 1 -> {
+                if (hasPartnerInHousehold || marriedByStatus) {
+                    yield PersonRole.MARRIED;
+                } else {
+                    yield PersonRole.SINGLE;
+                }
+            }
+
+            /*
+             * Partner / spouse.
+             */
+            case 2 -> PersonRole.MARRIED;
+
+            /*
+             * Child.
+             */
+            case 3 -> PersonRole.CHILD;
+
+            /*
+             * Other household member.
+             */
+            case 4 -> {
+                if (hasPartnerInHousehold || marriedByStatus) {
+                    yield PersonRole.MARRIED;
+                } else if (age >= 0 && age < 18) {
+                    yield PersonRole.CHILD;
+                } else {
+                    yield PersonRole.SINGLE;
+                }
+            }
+
+            default -> PersonRole.SINGLE;
+        };
+    }
+
     public static boolean obtainLicense(Gender gender, int age){
         boolean license = false;
         int row = 1;
@@ -611,16 +666,21 @@ public class MicroDataManager {
     public int dwellingYearfromBracket(int yearBracket) {
 
         int year;
-        if (yearBracket < 3 ) {
-            year = (int) (1900 + SiloUtil.getRandomNumberAsFloat() * 48);
+        int baseYear = de.tum.bgu.msm.properties.Properties.get().main.baseYear;
+        int last_year_gap = baseYear - 2020;
+        int max_year_gap = baseYear - 1900;
+        if ((yearBracket < 3 )&&(yearBracket > 0) ) {
+            year = (int) (1900 + SiloUtil.getRandomNumberAsFloat() * 49);
         } else if (yearBracket < 4) {
-            year = (int) (1949 + SiloUtil.getRandomNumberAsFloat() * 29);
+            year = (int) (1949 + SiloUtil.getRandomNumberAsFloat() * 30);
         } else if (yearBracket < 6) {
-            year = (int) (1979 + SiloUtil.getRandomNumberAsFloat() * 21);
+            year = (int) (1979 + SiloUtil.getRandomNumberAsFloat() * 22);
         } else if (yearBracket < 8) {
-            year = (int) (2001 + SiloUtil.getRandomNumberAsFloat() * 16);
+            year = (int) (2001 + SiloUtil.getRandomNumberAsFloat() * 19);
+        } else if (yearBracket == 10) {
+            year = (int) (2020 + SiloUtil.getRandomNumberAsFloat() * (last_year_gap+1));
         } else {
-            year = (int) (2018 + SiloUtil.getRandomNumberAsFloat() * 8);
+            year = (int) (1900 + SiloUtil.getRandomNumberAsFloat() * (max_year_gap+1));
         }
 
         return year;
