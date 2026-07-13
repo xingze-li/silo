@@ -97,7 +97,7 @@ public class AssignSchools {
          * This works if the matrix uses external zone IDs as labels.
          */
         try {
-            return dataSetSynPop.getDistanceTazToTaz().getValueAt(originZoneId, destinationZoneId);
+            return (float) dataSetSynPop.getDistanceKm(originZoneId, destinationZoneId);
         } catch (Exception ignored) {
             // Fall back to index mapping below.
         }
@@ -113,7 +113,7 @@ public class AssignSchools {
          * Try 0-based mapped indices.
          */
         try {
-            return dataSetSynPop.getDistanceTazToTaz().getValueAt(originIndex, destinationIndex);
+            return (float) dataSetSynPop.getDistanceKm(originIndex, destinationIndex);
         } catch (Exception ignored) {
             // Fall back to 1-based mapped indices below.
         }
@@ -122,7 +122,7 @@ public class AssignSchools {
          * Try 1-based mapped indices.
          */
         try {
-            return dataSetSynPop.getDistanceTazToTaz().getValueAt(originIndex + 1, destinationIndex + 1);
+            return (float) dataSetSynPop.getDistanceKm(originIndex + 1, destinationIndex + 1);
         } catch (Exception ignored) {
             return Float.POSITIVE_INFINITY;
         }
@@ -131,12 +131,12 @@ public class AssignSchools {
 
     private void calculateDistanceImpedance(){
 
-        distanceImpedanceTertiary = new Matrix(dataSetSynPop.getDistanceTazToTaz().getRowCount(), dataSetSynPop.getDistanceTazToTaz().getColumnCount());
-        distanceImpedancePrimarySecondary = new Matrix(dataSetSynPop.getDistanceTazToTaz().getRowCount(), dataSetSynPop.getDistanceTazToTaz().getColumnCount());
+        distanceImpedanceTertiary = new Matrix(dataSetSynPop.getTazIDs().length, dataSetSynPop.getTazIDs().length);
+        distanceImpedancePrimarySecondary = new Matrix(dataSetSynPop.getTazIDs().length, dataSetSynPop.getTazIDs().length);
         Map<Integer, Float> utilityMapTertiary = dataSetSynPop.getTripLengthDistribution().column("Tertiary");
-        for (int i = 1; i <= dataSetSynPop.getDistanceTazToTaz().getRowCount(); i ++){
-            for (int j = 1; j <= dataSetSynPop.getDistanceTazToTaz().getColumnCount(); j++){
-                int distance = (int) dataSetSynPop.getDistanceTazToTaz().getValueAt(i,j);
+        for (int i = 1; i <= dataSetSynPop.getTazIDs().length; i ++){
+            for (int j = 1; j <= dataSetSynPop.getTazIDs().length; j++){
+                int distance = (int) dataSetSynPop.getDistanceKm(i,j);
                 float utilityTertiary = 0.00000001f;
                 if (distance < 200){
                     utilityTertiary = utilityMapTertiary.get(distance);

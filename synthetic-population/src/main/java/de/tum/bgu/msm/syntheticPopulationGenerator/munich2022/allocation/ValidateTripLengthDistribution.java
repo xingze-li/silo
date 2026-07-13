@@ -237,9 +237,9 @@ private Frequency obtainWorkerFlows(
 
         int distance =
                 Math.round(
-                        dataSetSynPop
+                        (float) dataSetSynPop
                                 .getDistanceTazToTaz()
-                                .getValueAt(
+                                .getIndexed(
                                         origin,
                                         destination
                                 )
@@ -302,9 +302,9 @@ private Frequency obtainWorkerFlows(
 
             int distance =
                     Math.round(
-                            dataSetSynPop
+                            (float) dataSetSynPop
                                     .getDistanceTazToTaz()
-                                    .getValueAt(
+                                    .getIndexed(
                                             origin,
                                             destination
                                     )
@@ -349,7 +349,10 @@ private Frequency obtainWorkerFlows(
             int distance =
                     (int) dataSetSynPop
                             .getDistanceTazToTaz()
-                            .getValueAt(homeZone, schoolZone);
+                            .getIndexed(
+                                    homeZone,
+                                    schoolZone
+                            );
 
             schoolDistance.addValue(distance);
         }
