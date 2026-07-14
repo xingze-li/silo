@@ -118,11 +118,11 @@ public class AssignJobs {
 
    private void calculateDistanceImpedance(){
 
-        distanceImpedance = new Matrix(dataSetSynPop.getDistanceTazToTaz().getRowCount(), dataSetSynPop.getDistanceTazToTaz().getColumnCount());
+        distanceImpedance = new Matrix(dataSetSynPop.getTazIDs().length, dataSetSynPop.getTazIDs().length);
         Map<Integer, Float> utilityHBW = dataSetSynPop.getTripLengthDistribution().column("HBW");
-        for (int i = 1; i <= dataSetSynPop.getDistanceTazToTaz().getRowCount(); i ++){
-            for (int j = 1; j <= dataSetSynPop.getDistanceTazToTaz().getColumnCount(); j++){
-                int distance = (int) dataSetSynPop.getDistanceTazToTaz().getValueAt(i,j);
+        for (int i = 1; i <= dataSetSynPop.getTazIDs().length; i ++){
+            for (int j = 1; j <= dataSetSynPop.getTazIDs().length; j++){
+                int distance = (int) dataSetSynPop.getDistanceKm(i,j);
                 float utility = 0.00000001f;
                 if (distance < 200){
                     utility = utilityHBW.get(distance);

@@ -5,21 +5,29 @@ import com.google.common.collect.Table;
 import de.tum.bgu.msm.common.datafile.TableDataSet;
 import de.tum.bgu.msm.common.matrix.Matrix;
 //import de.tum.bgu.msm.data.dwelling.DefaultDwellingTypes;
+import de.tum.bgu.msm.data.AreaTypes;
+import de.tum.bgu.msm.data.Id;
+import de.tum.bgu.msm.data.MitoZone;
 import de.tum.bgu.msm.data.MunichDwellingTypes.DwellingTypeMunich;
+import de.tum.bgu.msm.data.Zone;
+import de.tum.bgu.msm.data.travelDistances.MatrixTravelDistances;
+import de.tum.bgu.msm.data.travelTimes.SkimTravelTimes;
+import de.tum.bgu.msm.io.input.AbstractParquetReader;
+import de.tum.bgu.msm.resources.Resources;
 import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
+import de.tum.bgu.msm.util.matrices.IndexedDoubleMatrix2D;
 import de.tum.bgu.msm.utils.SiloUtil;
 import omx.OmxFile;
 import omx.OmxLookup;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.matsim.api.core.v01.TransportMode;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class ReadZonalData {
 
@@ -106,6 +114,7 @@ public class ReadZonalData {
     private void readZones(){
         //TAZ attributes
         HashMap<Integer, int[]> cityTAZ = new HashMap<>();
+        Map<Integer, Id> zones = new LinkedHashMap<>();
         Map<Integer, Map<Integer, Float>> probabilityZone = new HashMap<>();
         Map<Integer, Map<DwellingTypeMunich, Integer>> dwellingPriceByTypeAndZone = new HashMap<>();
         Table<Integer, Integer, Integer> schoolCapacity = HashBasedTable.create();
@@ -127,6 +136,7 @@ public class ReadZonalData {
             int capacityPrimary = (int)zoneAttributes.getValueAt(i,"capacityPrimary");
             int capacitySecondary = (int)zoneAttributes.getValueAt(i,"capacitySecondary");
             int capacityTertiary = (int)zoneAttributes.getValueAt(i,"capacityTertiary");
+            int bbsr = (int)zoneAttributes.getValueAt(i,"BBSR");
             if (!tazs.contains(taz)) {
                 tazs.add(taz);
             }
@@ -152,6 +162,14 @@ public class ReadZonalData {
             schoolCapacity.put(taz,1,capacityPrimary);
             schoolCapacity.put(taz, 2, capacitySecondary);
             schoolCapacity.put(taz, 3, capacityTertiary);
+
+            MitoZone currentZone =
+                    new MitoZone(
+                            taz,
+                            AreaTypes.SGType.valueOf(bbsr)
+                    );
+
+            zones.put(taz, currentZone);
         }
         dataSetSynPop.setProbabilityZone(probabilityZone);
         dataSetSynPop.setDwellingPriceByTypeAndZone(dwellingPriceByTypeAndZone);
@@ -159,6 +177,7 @@ public class ReadZonalData {
         dataSetSynPop.setSchoolCapacity(schoolCapacity);
         dataSetSynPop.setTazs(tazs);
         dataSetSynPop.setTazIDs(tazs.stream().mapToInt(i -> i).toArray());
+        this.dataSetSynPop.setZones(zones);
     }
 
 //    private void readZones(){
@@ -240,20 +259,26 @@ public class ReadZonalData {
 
     private void readDistanceMatrix(){
         //Read the skim matrix
-        logger.info("   Starting to read OMX matrix");
-        OmxFile travelTimeOmx = new OmxFile(PropertiesSynPop.get().main.omxFileName);
-        travelTimeOmx.openReadOnly();
-        Matrix distanceMatrix = SiloUtil.convertOmxToMatrix(travelTimeOmx.getMatrix("mat1"));
-        OmxLookup omxLookUp = travelTimeOmx.getLookup("lookup1");
-        int[] externalNumbers = (int[]) omxLookUp.getLookup();
-        distanceMatrix.setExternalNumbersZeroBased(externalNumbers);
-        for (int i = 1; i <= distanceMatrix.getRowCount(); i++){
-            for (int j = 1; j <= distanceMatrix.getColumnCount(); j++){
-                distanceMatrix.setValueAt(i,j, distanceMatrix.getValueAt(i,j)/1000);
-            }
-        }
-        dataSetSynPop.setDistanceTazToTaz(distanceMatrix);
-        logger.info("   Read OMX matrix");
+        logger.info("   Starting to read Parquet matrix");
+
+        Collection<Id> lookup;
+        lookup = this.dataSetSynPop.getZones().values();
+        String parquetFile =
+                PropertiesSynPop.get()
+                        .main
+                        .omxFileName;
+
+        IndexedDoubleMatrix2D distanceSkimAuto =
+                AbstractParquetReader.readAndConvertToDoubleMatrix(
+                        parquetFile,
+                        "FROM",
+                        "TO",
+                        "inVehDistance_m",
+                        0.001,
+                        lookup
+                );
+        this.dataSetSynPop.setDistanceTazToTaz(distanceSkimAuto);
+        logger.info("   Read Parquet distance matrix from " + parquetFile);
     }
 
 

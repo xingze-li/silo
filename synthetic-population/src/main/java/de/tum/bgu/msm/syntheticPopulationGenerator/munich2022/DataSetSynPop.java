@@ -7,14 +7,15 @@ import de.tum.bgu.msm.common.datafile.TableDataSet;
 import de.tum.bgu.msm.common.matrix.Matrix;
 import de.tum.bgu.msm.data.MunichDwellingTypes;
 
+import de.tum.bgu.msm.data.Zone;
+import de.tum.bgu.msm.data.Id;
+import de.tum.bgu.msm.util.matrices.IndexedDoubleMatrix2D;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.geotools.api.feature.simple.SimpleFeature;
 import org.locationtech.jts.geom.Coordinate;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by Ana Moreno on 29.11.2017. Adapted from MITO
@@ -49,7 +50,7 @@ public class DataSetSynPop {
     private Table<Integer, String, Float> tripLengthDistribution;
     private ArrayList<Integer> municipalitiesWithZeroPopulation;
 
-    private Matrix distanceTazToTaz;
+    private IndexedDoubleMatrix2D distanceTazToTaz;
     private Matrix commuteFlowTazToTaz;
     private float[] areas;
     private Matrix distanceUtilityHBW;
@@ -64,6 +65,25 @@ public class DataSetSynPop {
     private TableDataSet dwellingDataSet;
 
     private Map<Integer, SimpleFeature> zoneFeatureMap;
+
+    public Map<Integer, Id> getZones() {
+        return Collections.unmodifiableMap(zones);
+    }
+
+
+    public void setZones(Map<Integer, Id> zones) {
+        this.zones = zones;
+    }
+
+    public Matrix getDistanceUtilityHBW() {
+        return distanceUtilityHBW;
+    }
+
+    public void setDistanceUtilityHBW(Matrix distanceUtilityHBW) {
+        this.distanceUtilityHBW = distanceUtilityHBW;
+    }
+
+    private Map<Integer, Id> zones = new LinkedHashMap<>();;
 
     private TableDataSet regionsforFrequencyMatrix;
     private HashMap<Integer, HashMap<Integer, Integer>> householdsForFrequencyMatrix;
@@ -113,11 +133,11 @@ public class DataSetSynPop {
         this.tazByMunicipality = tazByMunicipality;
     }
 
-    public Matrix getDistanceTazToTaz() {
+    public IndexedDoubleMatrix2D getDistanceTazToTaz() {
         return distanceTazToTaz;
     }
 
-    public void setDistanceTazToTaz(Matrix distanceTazToTaz) {
+    public void setDistanceTazToTaz(IndexedDoubleMatrix2D distanceTazToTaz) {
         this.distanceTazToTaz = distanceTazToTaz;
     }
 
@@ -456,5 +476,13 @@ public class DataSetSynPop {
 
     public void setNextVacantJobId(int nextVacantJobId) {
         this.nextVacantJobId = nextVacantJobId;
+    }
+
+    public double getDistanceKm(int originZone, int destinationZone) {
+        if (distanceTazToTaz == null) {
+            throw new IllegalStateException("distanceTazToTaz has not been initialized.");
+        }
+
+        return distanceTazToTaz.getIndexed(originZone, destinationZone);
     }
 }
