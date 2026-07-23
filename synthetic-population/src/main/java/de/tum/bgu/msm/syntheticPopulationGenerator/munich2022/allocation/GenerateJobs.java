@@ -10,9 +10,7 @@ import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
+import java.util.*;
 
 public class GenerateJobs {
 
@@ -29,65 +27,160 @@ public class GenerateJobs {
     public void run() {
 
         logger.info("   Running module: job generation");
+        logger.info("   Generating jobs for all zones in the research-area zoneAttributes.");
 
-        JobDataManager jobData = dataContainer.getJobDataManager();
-        TableDataSet zoneAttributes = getZoneAttributes();
+        JobDataManager jobData =
+                dataContainer.getJobDataManager();
 
-        int totalGeneratedJobs = 0;
-        Map<String, Integer> generatedJobsByType = new HashMap<>();
+        TableDataSet zoneAttributes =
+                getZoneAttributes();
 
-        for (int municipality : dataSetSynPop.getMunicipalities()) {
+        String[] jobTypes =
+                Arrays.stream(PropertiesSynPop.get().main.jobStringType)
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .toArray(String[]::new);
 
-            logger.info("   Municipality " + municipality + ". Starting to generate jobs");
+        int totalGeneratedJobs =
+                0;
 
-            int[] tazs = dataSetSynPop.getTazByMunicipality().get(municipality);
+        int zonesWithJobs =
+                0;
 
-            if (tazs == null || tazs.length == 0) {
-                logger.warn("   No TAZs found for municipality " + municipality + ". No jobs generated.");
-                continue;
-            }
+        Map<String, Integer> generatedJobsByType =
+                new TreeMap<>();
 
-            int generatedJobsInMunicipality = 0;
+        Map<Integer, Integer> generatedJobsByMunicipality =
+                new TreeMap<>();
 
-            for (int taz : tazs) {
+        String municipalityColumn =
+                PropertiesSynPop.get().main.boroughIPU
+                        ? "ID_borough"
+                        : "ID_city";
 
-                for (String rawJobType : PropertiesSynPop.get().main.jobStringType) {
+        for (int row = 1; row <= zoneAttributes.getRowCount(); row++) {
 
-                    String jobType = rawJobType.trim();
+            int taz =
+                    Math.round(
+                            zoneAttributes.getValueAt(
+                                    row,
+                                    "ID_cell"
+                            )
+                    );
 
-                    int numberOfJobs = readZoneJobsForType(zoneAttributes, taz, jobType);
+            int municipality =
+                    Math.round(
+                            zoneAttributes.getValueAt(
+                                    row,
+                                    municipalityColumn
+                            )
+                    );
 
-                    if (numberOfJobs <= 0) {
-                        continue;
-                    }
+            int generatedJobsInZone =
+                    0;
 
-                    for (int j = 0; j < numberOfJobs; j++) {
+            for (String jobType : jobTypes) {
 
-                        int id = jobData.getNextJobId();
-
-                        jobData.addJob(
-                                JobUtils.getFactory().createJob(
-                                        id,
-                                        taz,
-                                        null,
-                                        -1,
-                                        jobType
-                                )
+                int numberOfJobs =
+                        readZoneJobsForTypeByRow(
+                                zoneAttributes,
+                                row,
+                                jobType
                         );
-                    }
 
-                    totalGeneratedJobs += numberOfJobs;
-                    generatedJobsInMunicipality += numberOfJobs;
-                    generatedJobsByType.merge(jobType, numberOfJobs, Integer::sum);
+                if (numberOfJobs <= 0) {
+                    continue;
                 }
+
+                for (int j = 0; j < numberOfJobs; j++) {
+
+                    int id =
+                            jobData.getNextJobId();
+
+                    jobData.addJob(
+                            JobUtils
+                                    .getFactory()
+                                    .createJob(
+                                            id,
+                                            taz,
+                                            null,
+                                            -1,
+                                            jobType
+                                    )
+                    );
+                }
+
+                totalGeneratedJobs += numberOfJobs;
+                generatedJobsInZone += numberOfJobs;
+
+                generatedJobsByType.merge(
+                        jobType,
+                        numberOfJobs,
+                        Integer::sum
+                );
+
+                generatedJobsByMunicipality.merge(
+                        municipality,
+                        numberOfJobs,
+                        Integer::sum
+                );
             }
 
-            logger.info("   Municipality " + municipality +
-                    ". Generated jobs: " + generatedJobsInMunicipality);
+            if (generatedJobsInZone > 0) {
+                zonesWithJobs++;
+            }
         }
 
-        logger.info("   Finished job generation. Total generated jobs: " + totalGeneratedJobs);
-        logger.info("   Generated jobs by type: " + generatedJobsByType);
+        logger.info(
+                "   Finished job generation for all research-area zones. Total generated jobs: " +
+                        totalGeneratedJobs
+        );
+
+        logger.info(
+                "   Zones with generated jobs: " +
+                        zonesWithJobs +
+                        " / " +
+                        zoneAttributes.getRowCount()
+        );
+
+        logger.info(
+                "   Generated jobs by type: " +
+                        generatedJobsByType
+        );
+
+        logger.info(
+                "   Number of municipalities with generated jobs: " +
+                        generatedJobsByMunicipality.size()
+        );
+
+        logger.info(
+                "   Generated jobs by municipality: " +
+                        generatedJobsByMunicipality
+        );
+    }
+
+    private int readZoneJobsForTypeByRow(
+            TableDataSet zoneAttributes,
+            int row,
+            String jobType
+    ) {
+        if (!hasColumn(zoneAttributes, jobType)) {
+            throw new RuntimeException(
+                    "Missing job column in zoneAttributes: " +
+                            jobType +
+                            ". Check employment.types and zoneAttributes column names."
+            );
+        }
+
+        return Math.max(
+                0,
+                Math.round(
+                        zoneAttributes.getValueAt(
+                                row,
+                                jobType
+                        )
+                )
+        );
     }
 
     private TableDataSet getZoneAttributes() {
@@ -97,21 +190,6 @@ public class GenerateJobs {
         }
 
         return PropertiesSynPop.get().main.cellsMatrix;
-    }
-
-    private int readZoneJobsForType(TableDataSet zoneAttributes, int taz, String jobType) {
-
-        if (!hasColumn(zoneAttributes, jobType)) {
-            throw new RuntimeException(
-                    "Missing job column in zoneAttributes: " + jobType +
-                            ". Check employment.types and zoneAttributes column names."
-            );
-        }
-
-        return Math.max(
-                0,
-                Math.round(zoneAttributes.getIndexedValueAt(taz, jobType))
-        );
     }
 
     private boolean hasColumn(TableDataSet table, String columnName) {

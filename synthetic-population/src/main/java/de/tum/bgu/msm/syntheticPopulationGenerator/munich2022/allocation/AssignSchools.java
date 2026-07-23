@@ -1,7 +1,6 @@
 package de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.allocation;
 
 import com.google.common.collect.Table;
-import de.tum.bgu.msm.common.matrix.Matrix;
 import de.tum.bgu.msm.container.DataContainer;
 import de.tum.bgu.msm.data.dwelling.RealEstateDataManager;
 import de.tum.bgu.msm.data.household.Household;
@@ -10,7 +9,6 @@ import de.tum.bgu.msm.data.person.Occupation;
 import de.tum.bgu.msm.data.person.Person;
 import de.tum.bgu.msm.data.person.PersonMuc;
 import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
-import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
 import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -34,6 +32,7 @@ public class AssignSchools {
     private Map<Integer, Map<Integer,Integer>> schoolCapacityMap;
     private Map<Integer, Integer> numberOfVacantPlacesByType;
 //    private Map<Integer, Integer> zoneIdToMatrixIndex;
+    private static final boolean USE_TRIP_LENGTH_FOR_PRIMARY_SECONDARY = false;
 
     public AssignSchools(DataContainer dataContainer, DataSetSynPop dataSetSynPop){
         this.dataSetSynPop = dataSetSynPop;
@@ -83,10 +82,28 @@ public class AssignSchools {
                     1,
                     Integer::sum
             );
-            if (pp.getSchoolType() == 3){
-                schooltaz = selectTertiarySchool(hometaz);
+            if (pp.getSchoolType() == 3) {
+
+                schooltaz =
+                        selectTertiarySchool(
+                                hometaz
+                        );
+
+            } else if (USE_TRIP_LENGTH_FOR_PRIMARY_SECONDARY) {
+
+                schooltaz =
+                        selectPrimarySecondarySchoolTripLengthBased(
+                                hometaz,
+                                pp.getSchoolType()
+                        );
+
             } else {
-                schooltaz = selectPrimarySecondarySchool(hometaz, pp.getSchoolType());
+
+                schooltaz =
+                        selectPrimarySecondarySchoolNearest(
+                                hometaz,
+                                pp.getSchoolType()
+                        );
             }
             if (schooltaz > 0) {
 
@@ -391,46 +408,75 @@ public class AssignSchools {
     }
 
 
-//    private int selectPrimarySecondarySchool(int hometaz, int schoolType){
-//
-//        int schooltaz = -2;
-//
-//        Integer totalVacantPlaces = numberOfVacantPlacesByType.get(schoolType);
-//        Map<Integer, Integer> candidateZones = schoolCapacityMap.get(schoolType);
-//
-//        if (totalVacantPlaces == null || totalVacantPlaces <= 0 ||
-//                candidateZones == null || candidateZones.isEmpty()) {
-//            return schooltaz;
-//        }
-//
-//        float minDistance = Float.POSITIVE_INFINITY;
-//
-//        for (Integer zone : new ArrayList<>(candidateZones.keySet())) {
-//
-//            float distance = getDistanceByZoneIds(hometaz, zone);
-//
-//            if (Float.isNaN(distance) || Float.isInfinite(distance)) {
-//                continue;
-//            }
-//
-//            if (distance < minDistance) {
-//                schooltaz = zone;
-//                minDistance = distance;
-//            }
-//        }
-//
-//        if (schooltaz <= 0) {
-//            return schooltaz;
-//        }
-//
-//        consumeSchoolCapacity(schoolType, schooltaz);
-//
-//        assignedStudents++;
-//
-//        return schooltaz;
-//    }
+    private int selectPrimarySecondarySchoolNearest(
+            int hometaz,
+            int schoolType
+    ) {
+        int schooltaz =
+                -2;
 
-    private int selectPrimarySecondarySchool(
+        Integer totalVacantPlaces =
+                numberOfVacantPlacesByType.get(
+                        schoolType
+                );
+
+        Map<Integer, Integer> candidateZones =
+                schoolCapacityMap.get(
+                        schoolType
+                );
+
+        if (totalVacantPlaces == null ||
+                totalVacantPlaces <= 0 ||
+                candidateZones == null ||
+                candidateZones.isEmpty()) {
+            return schooltaz;
+        }
+
+        float minDistance =
+                Float.POSITIVE_INFINITY;
+
+        for (Integer zone : new ArrayList<>(candidateZones.keySet())) {
+
+            int remainingCapacity =
+                    candidateZones.get(zone);
+
+            if (remainingCapacity <= 0) {
+                continue;
+            }
+
+            float distance =
+                    getDistanceByZoneIds(
+                            hometaz,
+                            zone
+                    );
+
+            if (Float.isNaN(distance) ||
+                    Float.isInfinite(distance) ||
+                    distance < 0) {
+                continue;
+            }
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                schooltaz = zone;
+            }
+        }
+
+        if (schooltaz <= 0) {
+            return schooltaz;
+        }
+
+        consumeSchoolCapacity(
+                schoolType,
+                schooltaz
+        );
+
+        assignedStudents++;
+
+        return schooltaz;
+    }
+
+    private int selectPrimarySecondarySchoolTripLengthBased(
             int hometaz,
             int schoolType
     ) {
@@ -595,6 +641,20 @@ public class AssignSchools {
                 }
             }
         }
+        logger.info(
+                "School capacity candidate zones loaded: " +
+                        schoolCapacityMap
+                                .values()
+                                .stream()
+                                .flatMap(map -> map.keySet().stream())
+                                .distinct()
+                                .count()
+        );
+
+        logger.info(
+                "School vacant places by type: " +
+                        numberOfVacantPlacesByType
+        );
     }
 
     public boolean obtainLicense(Gender gender, int age){
