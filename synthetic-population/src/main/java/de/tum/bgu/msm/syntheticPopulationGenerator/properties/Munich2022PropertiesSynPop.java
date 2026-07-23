@@ -69,6 +69,9 @@ public class Munich2022PropertiesSynPop extends AbstractPropertiesSynPop {
         alphaJob = PropertiesUtil.getDoubleProperty(bundle, "employment.choice.alpha", 50);
         gammaJob = PropertiesUtil.getDoubleProperty(bundle, "employment.choice.gamma", -0.003);
         tripLengthDistributionFileName = PropertiesUtil.getStringProperty(bundle, "trip.length.distribution", "input/syntheticPopulation/tripLengthDistribution.csv");
+        tripLengthDistributionMunichFileName = PropertiesUtil.getStringProperty(bundle, "trip.length.distribution.munich", "input/syntheticPopulation/tripLengthDistribution_munich.csv");
+        tripLengthDistributionAugsburgFileName = PropertiesUtil.getStringProperty(bundle, "trip.length.distribution.augsburg", "input/syntheticPopulation/tripLengthDistribution_augsburg.csv");
+        tripLengthDistributionOtherFileName = PropertiesUtil.getStringProperty(bundle, "trip.length.distribution.other", "input/syntheticPopulation/tripLengthDistribution_other.csv");
 
         schoolTypes = PropertiesUtil.getIntPropertyArray(bundle, "school.types", new int[]{1, 2, 3});
         alphaUniversity = PropertiesUtil.getDoubleProperty(bundle, "university.choice.alpha", 50);

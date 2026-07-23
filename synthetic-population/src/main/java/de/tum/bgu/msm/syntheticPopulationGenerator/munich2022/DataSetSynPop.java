@@ -48,6 +48,8 @@ public class DataSetSynPop {
     private Table<Integer, Integer, Integer> schoolCapacity = HashBasedTable.create();
     private Table<Integer, String, Integer> zoneCoordinates = HashBasedTable.create();
     private Table<Integer, String, Float> tripLengthDistribution;
+    private Map<Integer, String> tripLengthRegionByTaz;
+    private Map<String, Table<Integer, String, Float>> tripLengthDistributionByRegion;
     private ArrayList<Integer> municipalitiesWithZeroPopulation;
 
     private IndexedDoubleMatrix2D distanceTazToTaz;
@@ -301,6 +303,98 @@ public class DataSetSynPop {
         this.tripLengthDistribution = tripLengthDistribution;
     }
 
+    public Map<Integer, String> getTripLengthRegionByTaz() {
+        return tripLengthRegionByTaz;
+    }
+
+    public void setTripLengthRegionByTaz(
+            Map<Integer, String> tripLengthRegionByTaz
+    ) {
+        this.tripLengthRegionByTaz = tripLengthRegionByTaz;
+    }
+
+    public Map<String, Table<Integer, String, Float>> getTripLengthDistributionByRegion() {
+        return tripLengthDistributionByRegion;
+    }
+
+    public void setTripLengthDistributionByRegion(
+            Map<String, Table<Integer, String, Float>> tripLengthDistributionByRegion
+    ) {
+        this.tripLengthDistributionByRegion = tripLengthDistributionByRegion;
+    }
+
+    public Table<Integer, String, Float> getTripLengthDistributionForZone(
+            int homeTaz
+    ) {
+        if (tripLengthDistributionByRegion == null ||
+                tripLengthDistributionByRegion.isEmpty()) {
+            return tripLengthDistribution;
+        }
+
+        String region =
+                getTripLengthRegionForZone(
+                        homeTaz
+                );
+
+        Table<Integer, String, Float> distribution =
+                tripLengthDistributionByRegion.get(region);
+
+        if (distribution == null) {
+            distribution =
+                    tripLengthDistributionByRegion.get("Other");
+        }
+
+        if (distribution == null) {
+            distribution =
+                    tripLengthDistribution;
+        }
+
+        return distribution;
+    }
+
+    public float getTripLengthWeight(
+            int homeTaz,
+            String purpose,
+            int distanceKm
+    ) {
+        Table<Integer, String, Float> distribution =
+                getTripLengthDistributionForZone(homeTaz);
+
+        if (distribution == null) {
+            return 0.00000001f;
+        }
+
+        Map<Integer, Float> weightByDistance =
+                distribution.column(purpose);
+
+        if (weightByDistance == null || weightByDistance.isEmpty()) {
+            return 0.00000001f;
+        }
+
+        int maxDistance =
+                weightByDistance
+                        .keySet()
+                        .stream()
+                        .mapToInt(Integer::intValue)
+                        .max()
+                        .orElse(0);
+
+        int lookupDistance =
+                Math.max(
+                        0,
+                        Math.min(distanceKm, maxDistance)
+                );
+
+        Float weight =
+                weightByDistance.get(lookupDistance);
+
+        if (weight == null || weight <= 0) {
+            return 0.00000001f;
+        }
+
+        return weight;
+    }
+
     public TableDataSet getHouseholdDataSet() {
         return householdDataSet;
     }
@@ -484,5 +578,18 @@ public class DataSetSynPop {
         }
 
         return distanceTazToTaz.getIndexed(originZone, destinationZone);
+    }
+
+    public String getTripLengthRegionForZone(
+            int homeTaz
+    ) {
+        if (tripLengthRegionByTaz == null) {
+            return "Other";
+        }
+
+        return tripLengthRegionByTaz.getOrDefault(
+                homeTaz,
+                "Other"
+        );
     }
 }

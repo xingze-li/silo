@@ -25,7 +25,7 @@ public class AssignJobs {
 
     private final DataSetSynPop dataSetSynPop;
     private final DataContainer dataContainer;
-    private Matrix distanceImpedance;
+//    private Matrix distanceImpedance;
 
     private HashMap<String, Integer> jobIntTypes;
     protected HashMap<Integer, int[]> idVacantJobsByZoneType;
@@ -38,6 +38,8 @@ public class AssignJobs {
     private ArrayList<Person> workerArrayList;
     private int assignedJobs;
     private int[] tazIds;
+    private final Set<String> printedJobWeightSamples =
+            new HashSet<>();
 
     private HashMap<Person, Integer> educationalLevel;
 
@@ -50,7 +52,7 @@ public class AssignJobs {
 
     public void run() {
         logger.info("   Running module: job allocation");
-        calculateDistanceImpedance();
+//        calculateDistanceImpedance();
         identifyVacantJobsByZoneType();
         shuffleWorkers();
         logger.info("Number of workers " + workerArrayList.size());
@@ -60,51 +62,155 @@ public class AssignJobs {
         int skippedUnsupportedJobType = 0;
         int skippedNoSameTypeVacancy = 0;
 
+        Map<String, Integer> workersByTripLengthRegion =
+                new TreeMap<>();
+
+        Map<String, Integer> assignedJobsByTripLengthRegion =
+                new TreeMap<>();
+
+        Map<String, Integer> skippedJobsByTripLengthRegion =
+                new TreeMap<>();
+
+        Map<String, DoubleSummaryStatistics> assignedJobDistanceStatsByRegion =
+                new TreeMap<>();
+
         for (Person pp : workerArrayList) {
 
-            String desiredJobType = getDesiredJobType(pp);
+            Household hh = pp.getHousehold();
+
+            int origin =
+                    realEstate
+                            .getDwelling(hh.getDwellingId())
+                            .getZoneId();
+
+            String tripLengthRegion =
+                    dataSetSynPop.getTripLengthRegionForZone(
+                            origin
+                    );
+
+            workersByTripLengthRegion.merge(
+                    tripLengthRegion,
+                    1,
+                    Integer::sum
+            );
+
+            String desiredJobType =
+                    getDesiredJobType(pp);
 
             if (desiredJobType.isEmpty()) {
                 skippedNoJobType++;
+
+                skippedJobsByTripLengthRegion.merge(
+                        tripLengthRegion,
+                        1,
+                        Integer::sum
+                );
+
                 continue;
             }
 
-            Integer selectedJobTypeObject = jobIntTypes.get(desiredJobType);
+            Integer selectedJobTypeObject =
+                    jobIntTypes.get(desiredJobType);
 
             if (selectedJobTypeObject == null) {
                 skippedUnsupportedJobType++;
+
+                skippedJobsByTripLengthRegion.merge(
+                        tripLengthRegion,
+                        1,
+                        Integer::sum
+                );
+
                 continue;
             }
 
-            int selectedJobType = selectedJobTypeObject;
+            int selectedJobType =
+                    selectedJobTypeObject;
 
-            Household hh = pp.getHousehold();
-            int origin = realEstate.getDwelling(hh.getDwellingId()).getZoneId();
-
-            int[] workplace = selectWorkplace(origin, selectedJobType);
+            int[] workplace =
+                    selectWorkplace(
+                            origin,
+                            selectedJobType
+                    );
 
             if (workplace[0] <= 0) {
                 skippedNoSameTypeVacancy++;
+
+                skippedJobsByTripLengthRegion.merge(
+                        tripLengthRegion,
+                        1,
+                        Integer::sum
+                );
+
                 continue;
             }
 
-            Integer numberVacant = numberVacantJobsByZoneByType.get(workplace[0]);
-            int[] jobIds = idVacantJobsByZoneType.get(workplace[0]);
+            Integer numberVacant =
+                    numberVacantJobsByZoneByType.get(
+                            workplace[0]
+                    );
 
-            if (numberVacant == null || numberVacant <= 0 || jobIds == null) {
+            int[] jobIds =
+                    idVacantJobsByZoneType.get(
+                            workplace[0]
+                    );
+
+            if (numberVacant == null ||
+                    numberVacant <= 0 ||
+                    jobIds == null) {
                 skippedNoSameTypeVacancy++;
+
+                skippedJobsByTripLengthRegion.merge(
+                        tripLengthRegion,
+                        1,
+                        Integer::sum
+                );
+
                 continue;
             }
 
-            int jobID = jobIds[numberVacant - 1];
+            int jobID =
+                    jobIds[numberVacant - 1];
 
             setWorkerAndJob(pp, jobID);
-            updateMaps(selectedJobType, workplace);
+
+            int selectedDestinationTaz =
+                    workplace[0] / 100;
+
+            double selectedDistanceKm =
+                    dataSetSynPop.getDistanceKm(
+                            origin,
+                            selectedDestinationTaz
+                    );
+
+            if (Double.isFinite(selectedDistanceKm)) {
+                assignedJobDistanceStatsByRegion
+                        .computeIfAbsent(
+                                tripLengthRegion,
+                                r -> new DoubleSummaryStatistics()
+                        )
+                        .accept(selectedDistanceKm);
+            }
+
+            updateMaps(
+                    selectedJobType,
+                    workplace
+            );
 
             assignedJobs++;
 
+            assignedJobsByTripLengthRegion.merge(
+                    tripLengthRegion,
+                    1,
+                    Integer::sum
+            );
+
             if (LongMath.isPowerOfTwo(assignedJobs)) {
-                logger.info("   Assigned " + assignedJobs + " jobs.");
+                logger.info(
+                        "   Assigned " +
+                                assignedJobs +
+                                " jobs."
+                );
             }
         }
 
@@ -113,24 +219,52 @@ public class AssignJobs {
         logger.info("   Skipped employed persons with unsupported jobType: " + skippedUnsupportedJobType);
         logger.info("   Skipped employed persons because no same-type vacancy exists: " + skippedNoSameTypeVacancy);
         logger.info("   Finished job allocation. Assigned " + assignedJobs + " jobs.");
+        assignedJobDistanceStatsByRegion.forEach(
+                (region, stats) -> logger.info(
+                        "Assigned job distance stats for " +
+                                region +
+                                ": count=" +
+                                stats.getCount() +
+                                ", avgKm=" +
+                                stats.getAverage() +
+                                ", minKm=" +
+                                stats.getMin() +
+                                ", maxKm=" +
+                                stats.getMax()
+                )
+        );
+        logger.info(
+                "Job allocation workers by trip length region: " +
+                        workersByTripLengthRegion
+        );
+
+        logger.info(
+                "Job allocation assigned by trip length region: " +
+                        assignedJobsByTripLengthRegion
+        );
+
+        logger.info(
+                "Job allocation skipped by trip length region: " +
+                        skippedJobsByTripLengthRegion
+        );
     }
 
 
-   private void calculateDistanceImpedance(){
-
-        distanceImpedance = new Matrix(dataSetSynPop.getTazIDs().length, dataSetSynPop.getTazIDs().length);
-        Map<Integer, Float> utilityHBW = dataSetSynPop.getTripLengthDistribution().column("HBW");
-        for (int i = 1; i <= dataSetSynPop.getTazIDs().length; i ++){
-            for (int j = 1; j <= dataSetSynPop.getTazIDs().length; j++){
-                int distance = (int) dataSetSynPop.getDistanceKm(i,j);
-                float utility = 0.00000001f;
-                if (distance < 200){
-                    utility = utilityHBW.get(distance);
-                }
-                distanceImpedance.setValueAt(i, j, utility);
-            }
-        }
-    }
+//   private void calculateDistanceImpedance(){
+//
+//        distanceImpedance = new Matrix(dataSetSynPop.getTazIDs().length, dataSetSynPop.getTazIDs().length);
+//        Map<Integer, Float> utilityHBW = dataSetSynPop.getTripLengthDistribution().column("HBW");
+//        for (int i = 1; i <= dataSetSynPop.getTazIDs().length; i ++){
+//            for (int j = 1; j <= dataSetSynPop.getTazIDs().length; j++){
+//                int distance = (int) dataSetSynPop.getDistanceKm(i,j);
+//                float utility = 0.00000001f;
+//                if (distance < 200){
+//                    utility = utilityHBW.get(distance);
+//                }
+//                distanceImpedance.setValueAt(i, j, utility);
+//            }
+//        }
+//    }
 
 
     private void setWorkerAndJob(Person pp, int jobID){
@@ -148,61 +282,120 @@ public class AssignJobs {
     }
 
 
-    private int[] selectWorkplace(int homeTaz, int selectedJobType) {
+private int[] selectWorkplace(int homeTaz, int selectedJobType) {
 
-        int[] workplace = new int[2];
-        workplace[0] = -2;
-        workplace[1] = -1;
+    int[] workplace = new int[2];
+    workplace[0] = -2;
+    workplace[1] = -1;
 
-        Integer numberOfZonesObject = numberZonesByType.get(selectedJobType);
+    Integer numberOfZonesObject =
+            numberZonesByType.get(selectedJobType);
 
-        if (numberOfZonesObject == null || numberOfZonesObject <= 0) {
-            return workplace;
-        }
-
-        int numberOfZones = numberOfZonesObject;
-
-        int[] ids = idZonesVacantJobsByType.get(selectedJobType);
-
-        if (ids == null || ids.length == 0) {
-            return workplace;
-        }
-
-        double[] probs = new double[numberOfZones];
-
-        RowVector distances = distanceImpedance.getRow(homeTaz);
-
-        IntStream.range(0, probs.length).parallel().forEach(index -> {
-
-            int zoneType = ids[index];
-
-            Integer numberVacant = numberVacantJobsByZoneByType.get(zoneType);
-
-            if (numberVacant == null || numberVacant <= 0) {
-                probs[index] = 0;
-                return;
-            }
-
-            int destinationTaz = zoneType / 100;
-
-            double distanceWeight = distances.getValueAt(destinationTaz);
-
-            if (Double.isNaN(distanceWeight) || Double.isInfinite(distanceWeight) || distanceWeight < 0) {
-                probs[index] = 0;
-                return;
-            }
-
-            probs[index] = distanceWeight * Math.pow(numberVacant, 0.45);
-        });
-
-        double sumProbability = Arrays.stream(probs).sum();
-
-        if (sumProbability <= 0) {
-            return workplace;
-        }
-
-        return select(probs, ids);
+    if (numberOfZonesObject == null || numberOfZonesObject <= 0) {
+        return workplace;
     }
+
+    int numberOfZones =
+            numberOfZonesObject;
+
+    int[] ids =
+            idZonesVacantJobsByType.get(selectedJobType);
+
+    if (ids == null || ids.length == 0) {
+        return workplace;
+    }
+
+    double[] probs =
+            new double[numberOfZones];
+
+    for (int index = 0; index < probs.length; index++) {
+
+        int zoneType =
+                ids[index];
+
+        Integer numberVacant =
+                numberVacantJobsByZoneByType.get(zoneType);
+
+        if (numberVacant == null || numberVacant <= 0) {
+            probs[index] = 0;
+            continue;
+        }
+
+        int destinationTaz =
+                zoneType / 100;
+
+        double distance =
+                dataSetSynPop.getDistanceKm(
+                        homeTaz,
+                        destinationTaz
+                );
+
+        if (!Double.isFinite(distance) || distance < 0) {
+            probs[index] = 0;
+            continue;
+        }
+
+        int distanceKm =
+                (int) Math.round(distance);
+
+        float distanceWeight =
+                dataSetSynPop.getTripLengthWeight(
+                        homeTaz,
+                        "HBW",
+                        distanceKm
+                );
+
+        String tripLengthRegion =
+                dataSetSynPop.getTripLengthRegionForZone(
+                        homeTaz
+                );
+
+        String sampleKey =
+                tripLengthRegion + "_HBW";
+
+        if (!printedJobWeightSamples.contains(sampleKey)) {
+
+            printedJobWeightSamples.add(sampleKey);
+
+            logger.info(
+                    "Job allocation uses trip length distribution: region=" +
+                            tripLengthRegion +
+                            ", purpose=HBW" +
+                            ", homeTaz=" +
+                            homeTaz +
+                            ", destinationTaz=" +
+                            destinationTaz +
+                            ", distanceKm=" +
+                            distanceKm +
+                            ", distanceWeight=" +
+                            distanceWeight
+            );
+        }
+
+        if (distanceWeight <= 0 ||
+                Float.isNaN(distanceWeight) ||
+                Float.isInfinite(distanceWeight)) {
+            probs[index] = 0;
+            continue;
+        }
+
+        probs[index] =
+                distanceWeight *
+                        Math.pow(
+                                numberVacant,
+                                0.45
+                        );
+    }
+
+    double sumProbability =
+            Arrays.stream(probs).sum();
+
+    if (sumProbability <= 0) {
+        return workplace;
+    }
+
+    return select(probs, ids);
+}
 
 
     private void shuffleWorkers(){
