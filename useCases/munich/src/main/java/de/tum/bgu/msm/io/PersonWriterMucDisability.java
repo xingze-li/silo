@@ -52,6 +52,7 @@ public class PersonWriterMucDisability implements PersonWriter {
         pwp.print(",p.disabilityDegree");
 
         pwp.print(",p.householdRole");
+        pwp.print(",p.income");
         pwp.print(",p.privateHousehold");
         pwp.print(",p.partnerInHousehold");
         pwp.print(",p.municipalityType");
@@ -159,6 +160,9 @@ public class PersonWriterMucDisability implements PersonWriter {
 
             pwp.print(",");
             pwp.print(getAttributeOrDefault(pp, "p.householdRole", "0"));
+
+            pwp.print(",");
+            pwp.print(getAttributeOrDefault(pp, "p.income", "0"));
 
             pwp.print(",");
             pwp.print(getAttributeOrDefault(pp, "p.privateHousehold", "0"));

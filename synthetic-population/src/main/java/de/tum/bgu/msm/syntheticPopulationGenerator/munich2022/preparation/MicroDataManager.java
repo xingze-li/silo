@@ -246,122 +246,73 @@ public class MicroDataManager {
 //    }
 
 
-    public int translateIncome(int valueMicroData){
-        int valueCode = 0;
-        double low = 0;
-        double high = 1;
-        double income = 0;
-        switch (valueMicroData){
-            case 90: // kein Einkommen
-                valueCode = 0;
-                break;
-            case 1: //income class
-                low = 0;
-                high = 0.07998391;
-                break;
-            case 2: //income class
-                low = 0.07998391;
-                high = 0.15981282;
-                break;
-            case 3: //income class
-                low = 0.15981282;
-                high = 0.25837521;
-                break;
-            case 4: //income class
-                low = 0.25837521;
-                high = 0.34694010;
-                break;
-            case 5: //income class
-                low = 0.34694010;
-                high = 0.42580696;
-                break;
-            case 6: //income class
-                low = 0.42580696;
-                high = 0.49569720;
-                break;
-            case 7: //income class
-                low = 0.49569720;
-                high = 0.55744375;
-                break;
-            case 8: //income class
-                low = 0.55744375;
-                high = 0.61188119;
-                break;
-            case 9: //income class
-                low = 0.61188119;
-                high = 0.65980123;
-                break;
-            case 10: //income class
-                low = 0.65980123;
-                high = 0.72104215;
-                break;
-            case 11: //income class
-                low = 0.72104215;
-                high = 0.77143538;
-                break;
-            case 12: //income class
-                low = 0.77143538;
-                high = 0.81284178;
-                break;
-            case 13: //income class
-                low = 0.81284178;
-                high = 0.84682585;
-                break;
-            case 14: //income class
-                low = 0.84682585;
-                high = 0.87469331;
-                break;
-            case 15: //income class
-                low = 0.87469331;
-                high = 0.90418202;
-                break;
-            case 16: //income class
-                low = 0.90418202;
-                high = 0.92677087;
-                break;
-            case 17: //income class
-                low = 0.92677087;
-                high = 0.94770566;
-                break;
-            case 18: //income class
-                low = 0.94770566;
-                high = 0.96267752;
-                break;
-            case 19: //income class
-                low = 0.96267752;
-                high = 0.97337602;
-                break;
-            case 20: //income class
-                low = 0.97337602;
-                high = 0.98101572;
-                break;
-            case 21: //income class
-                low = 0.98101572;
-                high = 0.99313092;
-                break;
-            case 22: //income class
-                low = 0.99313092;
-                high = 0.99874378;
-                break;
-            case 23: //income class
-                low = 0.99874378;
-                high = 0.99999464;
-                break;
-            case 24: //income class
-                low = 0.99999464;
-                high = 1;
-                break;
-        }
-        double cummulativeProb = SiloUtil.getRandomNumberAsDouble()*(high - low) + low;
-        try {
-            income = PropertiesSynPop.get().main.incomeGammaDistribution.inverseCumulativeProbability(cummulativeProb);
-            valueCode = (int) income;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return valueCode;
-    }
+    public int translateIncome(int valueMicroData) {
 
+        if (valueMicroData == 90) {
+            return 0;
+        }
+
+        double[][] incomeBounds = {
+                {0, 250},          // 1
+                {250, 500},        // 2
+                {500, 750},        // 3
+                {750, 1000},       // 4
+                {1000, 1250},      // 5
+                {1250, 1500},      // 6
+                {1500, 1750},      // 7
+                {1750, 2000},      // 8
+                {2000, 2250},      // 9
+                {2250, 2500},      // 10
+                {2500, 2750},      // 11
+                {2750, 3000},      // 12
+                {3000, 3250},      // 13
+                {3250, 3500},      // 14
+                {3500, 4000},      // 15
+                {4000, 4500},      // 16
+                {4500, 5000},      // 17
+                {5000, 6000},      // 18
+                {6000, 7000},      // 19
+                {7000, 8000},      // 20
+                {8000, 10000},     // 21
+                {10000, 15000},    // 22
+                {15000, 25000},    // 23
+                {25000, Double.POSITIVE_INFINITY} // 24
+        };
+
+        if (valueMicroData < 1 || valueMicroData > incomeBounds.length) {
+            return 0;
+        }
+
+        double lower = incomeBounds[valueMicroData - 1][0];
+        double upper = incomeBounds[valueMicroData - 1][1];
+
+        double lowProb =
+                PropertiesSynPop.get()
+                        .main
+                        .incomeGammaDistribution
+                        .cumulativeProbability(lower);
+
+        double highProb =
+                Double.isInfinite(upper)
+                        ? 0.999999
+                        : PropertiesSynPop.get()
+                          .main
+                          .incomeGammaDistribution
+                          .cumulativeProbability(upper);
+
+        double cumulativeProb =
+                SiloUtil.getRandomNumberAsDouble()
+                        * (highProb - lowProb)
+                        + lowProb;
+
+        double income =
+                PropertiesSynPop.get()
+                        .main
+                        .incomeGammaDistribution
+                        .inverseCumulativeProbability(cumulativeProb);
+
+        return Math.max(0, (int) Math.round(income));
+    }
 
     public Nationality translateNationality (int nationality){
         Nationality nationality1 = Nationality.GERMAN;
