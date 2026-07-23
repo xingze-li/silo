@@ -1,7 +1,6 @@
 package de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.allocation;
 
 import com.google.common.collect.Table;
-import de.tum.bgu.msm.common.matrix.Matrix;
 import de.tum.bgu.msm.container.DataContainer;
 import de.tum.bgu.msm.data.dwelling.RealEstateDataManager;
 import de.tum.bgu.msm.data.household.Household;
@@ -10,7 +9,6 @@ import de.tum.bgu.msm.data.person.Occupation;
 import de.tum.bgu.msm.data.person.Person;
 import de.tum.bgu.msm.data.person.PersonMuc;
 import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
-import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
 import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,12 +24,15 @@ public class AssignSchools {
 
     private ArrayList<Person> studentArrayList;
     private int assignedStudents;
+    private final Set<String> printedSchoolWeightSamples =
+            new HashSet<>();
 
-    private Matrix distanceImpedancePrimarySecondary;
-    private Matrix distanceImpedanceTertiary;
+//    private Matrix distanceImpedancePrimarySecondary;
+//    private Matrix distanceImpedanceTertiary;
     private Map<Integer, Map<Integer,Integer>> schoolCapacityMap;
     private Map<Integer, Integer> numberOfVacantPlacesByType;
-    private Map<Integer, Integer> zoneIdToMatrixIndex;
+//    private Map<Integer, Integer> zoneIdToMatrixIndex;
+    private static final boolean USE_TRIP_LENGTH_FOR_PRIMARY_SECONDARY = false;
 
     public AssignSchools(DataContainer dataContainer, DataSetSynPop dataSetSynPop){
         this.dataSetSynPop = dataSetSynPop;
@@ -41,9 +42,17 @@ public class AssignSchools {
     public void run() {
         logger.info("   Running module: school allocation");
 //        calculateDistanceImpedance();
-        initializeZoneToMatrixIndex();
+//        initializeZoneToMatrixIndex();
         initializeSchoolCapacity();
         shuffleStudents();
+        Map<String, Integer> studentsByTripLengthRegionAndType =
+                new TreeMap<>();
+
+        Map<String, Integer> assignedSchoolsByTripLengthRegionAndType =
+                new TreeMap<>();
+
+        Map<String, DoubleSummaryStatistics> assignedSchoolDistanceStatsByRegionAndType =
+                new TreeMap<>();
 
         for (Person pp : dataContainer.getHouseholdDataManager().getPersons()){
             pp.setDriverLicense(obtainLicense(pp.getGender(),pp.getAge()));
@@ -58,14 +67,72 @@ public class AssignSchools {
             int schooltaz;
             Household household = pp.getHousehold();
             int hometaz = realEstate.getDwelling(household.getDwellingId()).getZoneId();
-            if (pp.getSchoolType() == 3){
-                schooltaz = selectTertiarySchool(hometaz);
+            String tripLengthRegion =
+                    dataSetSynPop.getTripLengthRegionForZone(
+                            hometaz
+                    );
+
+            String schoolStatKey =
+                    tripLengthRegion +
+                            "_type" +
+                            pp.getSchoolType();
+
+            studentsByTripLengthRegionAndType.merge(
+                    schoolStatKey,
+                    1,
+                    Integer::sum
+            );
+            if (pp.getSchoolType() == 3) {
+
+                schooltaz =
+                        selectTertiarySchool(
+                                hometaz
+                        );
+
+            } else if (USE_TRIP_LENGTH_FOR_PRIMARY_SECONDARY) {
+
+                schooltaz =
+                        selectPrimarySecondarySchoolTripLengthBased(
+                                hometaz,
+                                pp.getSchoolType()
+                        );
+
             } else {
-                schooltaz = selectPrimarySecondarySchool(hometaz, pp.getSchoolType());
+
+                schooltaz =
+                        selectPrimarySecondarySchoolNearest(
+                                hometaz,
+                                pp.getSchoolType()
+                        );
             }
             if (schooltaz > 0) {
+
                 pp.setSchoolPlace(schooltaz);
+
+                assignedSchoolsByTripLengthRegionAndType.merge(
+                        schoolStatKey,
+                        1,
+                        Integer::sum
+                );
+
+                double selectedSchoolDistanceKm =
+                        dataSetSynPop.getDistanceKm(
+                                hometaz,
+                                schooltaz
+                        );
+
+                if (Double.isFinite(selectedSchoolDistanceKm) &&
+                        selectedSchoolDistanceKm >= 0) {
+
+                    assignedSchoolDistanceStatsByRegionAndType
+                            .computeIfAbsent(
+                                    schoolStatKey,
+                                    key -> new DoubleSummaryStatistics()
+                            )
+                            .accept(selectedSchoolDistanceKm);
+                }
             }
+
             if (assignedStudents == logging){
                 logger.info("   Assigned " + assignedStudents + " schools.");
                 it++;
@@ -73,79 +140,138 @@ public class AssignSchools {
             }
         }
 
+        logger.info(
+                "School allocation students by trip length region and type: " +
+                        studentsByTripLengthRegionAndType
+        );
+
+        logger.info(
+                "School allocation assigned by trip length region and type: " +
+                        assignedSchoolsByTripLengthRegionAndType
+        );
+
+        assignedSchoolDistanceStatsByRegionAndType.forEach(
+                (key, stats) -> logger.info(
+                        "Assigned school distance stats for " +
+                                key +
+                                ": count=" +
+                                stats.getCount() +
+                                ", avgKm=" +
+                                stats.getAverage() +
+                                ", minKm=" +
+                                stats.getMin() +
+                                ", maxKm=" +
+                                stats.getMax()
+                )
+        );
+
     }
 
-    private void initializeZoneToMatrixIndex() {
+//    private void initializeZoneToMatrixIndex() {
+//
+//        zoneIdToMatrixIndex = new HashMap<>();
+//
+//        int[] zoneIds = PropertiesSynPop.get().main.cellsMatrix.getColumnAsInt("ID_cell");
+//
+//        /*
+//         * Build both 0-based and 1-based fallback candidates.
+//         * The helper method will first try real zone IDs, then mapped indices.
+//         */
+//        for (int i = 0; i < zoneIds.length; i++) {
+//            zoneIdToMatrixIndex.put(zoneIds[i], i);
+//        }
+//    }
 
-        zoneIdToMatrixIndex = new HashMap<>();
+//    private float getDistanceByZoneIds(int originZoneId, int destinationZoneId) {
+//
+//        /*
+//         * First try using zone IDs directly.
+//         * This works if the matrix uses external zone IDs as labels.
+//         */
+//        try {
+//            return (float) dataSetSynPop.getDistanceKm(originZoneId, destinationZoneId);
+//        } catch (Exception ignored) {
+//            // Fall back to index mapping below.
+//        }
+//
+//        Integer originIndex = zoneIdToMatrixIndex.get(originZoneId);
+//        Integer destinationIndex = zoneIdToMatrixIndex.get(destinationZoneId);
+//
+//        if (originIndex == null || destinationIndex == null) {
+//            return Float.POSITIVE_INFINITY;
+//        }
+//
+//        /*
+//         * Try 0-based mapped indices.
+//         */
+//        try {
+//            return (float) dataSetSynPop.getDistanceKm(originIndex, destinationIndex);
+//        } catch (Exception ignored) {
+//            // Fall back to 1-based mapped indices below.
+//        }
+//
+//        /*
+//         * Try 1-based mapped indices.
+//         */
+//        try {
+//            return (float) dataSetSynPop.getDistanceKm(originIndex + 1, destinationIndex + 1);
+//        } catch (Exception ignored) {
+//            return Float.POSITIVE_INFINITY;
+//        }
+//    }
 
-        int[] zoneIds = PropertiesSynPop.get().main.cellsMatrix.getColumnAsInt("ID_cell");
+    private float getDistanceByZoneIds(
+            int originZoneId,
+            int destinationZoneId
+    ) {
+        double distance =
+                dataSetSynPop.getDistanceKm(
+                        originZoneId,
+                        destinationZoneId
+                );
 
-        /*
-         * Build both 0-based and 1-based fallback candidates.
-         * The helper method will first try real zone IDs, then mapped indices.
-         */
-        for (int i = 0; i < zoneIds.length; i++) {
-            zoneIdToMatrixIndex.put(zoneIds[i], i);
-        }
-    }
-
-    private float getDistanceByZoneIds(int originZoneId, int destinationZoneId) {
-
-        /*
-         * First try using zone IDs directly.
-         * This works if the matrix uses external zone IDs as labels.
-         */
-        try {
-            return (float) dataSetSynPop.getDistanceKm(originZoneId, destinationZoneId);
-        } catch (Exception ignored) {
-            // Fall back to index mapping below.
-        }
-
-        Integer originIndex = zoneIdToMatrixIndex.get(originZoneId);
-        Integer destinationIndex = zoneIdToMatrixIndex.get(destinationZoneId);
-
-        if (originIndex == null || destinationIndex == null) {
+        if (!Double.isFinite(distance) || distance < 0) {
             return Float.POSITIVE_INFINITY;
         }
 
-        /*
-         * Try 0-based mapped indices.
-         */
-        try {
-            return (float) dataSetSynPop.getDistanceKm(originIndex, destinationIndex);
-        } catch (Exception ignored) {
-            // Fall back to 1-based mapped indices below.
+        return (float) distance;
+    }
+
+    private String getSchoolPurpose(int schoolType) {
+
+        if (schoolType == 1) {
+            return "Primary";
         }
 
-        /*
-         * Try 1-based mapped indices.
-         */
-        try {
-            return (float) dataSetSynPop.getDistanceKm(originIndex + 1, destinationIndex + 1);
-        } catch (Exception ignored) {
-            return Float.POSITIVE_INFINITY;
+        if (schoolType == 2) {
+            return "Secondary";
         }
+
+        if (schoolType == 3) {
+            return "Tertiary";
+        }
+
+        return "Primary";
     }
 
 
-    private void calculateDistanceImpedance(){
-
-        distanceImpedanceTertiary = new Matrix(dataSetSynPop.getTazIDs().length, dataSetSynPop.getTazIDs().length);
-        distanceImpedancePrimarySecondary = new Matrix(dataSetSynPop.getTazIDs().length, dataSetSynPop.getTazIDs().length);
-        Map<Integer, Float> utilityMapTertiary = dataSetSynPop.getTripLengthDistribution().column("Tertiary");
-        for (int i = 1; i <= dataSetSynPop.getTazIDs().length; i ++){
-            for (int j = 1; j <= dataSetSynPop.getTazIDs().length; j++){
-                int distance = (int) dataSetSynPop.getDistanceKm(i,j);
-                float utilityTertiary = 0.00000001f;
-                if (distance < 200){
-                    utilityTertiary = utilityMapTertiary.get(distance);
-                }
-                distanceImpedanceTertiary.setValueAt(i,j,utilityTertiary);
-                distanceImpedancePrimarySecondary.setValueAt(i,j, distance);
-            }
-        }
-    }
+//    private void calculateDistanceImpedance(){
+//
+//        distanceImpedanceTertiary = new Matrix(dataSetSynPop.getTazIDs().length, dataSetSynPop.getTazIDs().length);
+//        distanceImpedancePrimarySecondary = new Matrix(dataSetSynPop.getTazIDs().length, dataSetSynPop.getTazIDs().length);
+//        Map<Integer, Float> utilityMapTertiary = dataSetSynPop.getTripLengthDistribution().column("Tertiary");
+//        for (int i = 1; i <= dataSetSynPop.getTazIDs().length; i ++){
+//            for (int j = 1; j <= dataSetSynPop.getTazIDs().length; j++){
+//                int distance = (int) dataSetSynPop.getDistanceKm(i,j);
+//                float utilityTertiary = 0.00000001f;
+//                if (distance < 200){
+//                    utilityTertiary = utilityMapTertiary.get(distance);
+//                }
+//                distanceImpedanceTertiary.setValueAt(i,j,utilityTertiary);
+//                distanceImpedancePrimarySecondary.setValueAt(i,j, distance);
+//            }
+//        }
+//    }
 
     private void consumeSchoolCapacity(int schoolType, int schooltaz) {
 
@@ -170,37 +296,63 @@ public class AssignSchools {
         }
     }
 
-    private float getTertiaryDistanceWeight(int originZoneId, int destinationZoneId) {
+//    private float getTertiaryDistanceWeight(int originZoneId, int destinationZoneId) {
+//
+//        float distance = getDistanceByZoneIds(originZoneId, destinationZoneId);
+//
+//        if (Float.isNaN(distance) || Float.isInfinite(distance) || distance < 0) {
+//            return 0f;
+//        }
+//
+//        // if distance is m
+//        int distanceKm = Math.round(distance / 1000f);
+//
+//        // int distanceKm = Math.round(distance);
+//
+//        Map<Integer, Float> utilityMapTertiary =
+//                dataSetSynPop.getTripLengthDistribution().column("Tertiary");
+//
+//        int maxDistanceKm = utilityMapTertiary.keySet()
+//                .stream()
+//                .mapToInt(Integer::intValue)
+//                .max()
+//                .orElse(0);
+//
+//        int lookupDistanceKm = Math.min(distanceKm, maxDistanceKm);
+//
+//        Float utility = utilityMapTertiary.get(lookupDistanceKm);
+//
+//        if (utility == null || utility <= 0) {
+//            return 0.00000001f;
+//        }
+//
+//        return utility;
+//    }
 
-        float distance = getDistanceByZoneIds(originZoneId, destinationZoneId);
+    private float getTertiaryDistanceWeight(
+            int originZoneId,
+            int destinationZoneId
+    ) {
+        float distance =
+                getDistanceByZoneIds(
+                        originZoneId,
+                        destinationZoneId
+                );
 
-        if (Float.isNaN(distance) || Float.isInfinite(distance) || distance < 0) {
+        if (Float.isNaN(distance) ||
+                Float.isInfinite(distance) ||
+                distance < 0) {
             return 0f;
         }
 
-        // if distance is m
-        int distanceKm = Math.round(distance / 1000f);
+        int distanceKm =
+                Math.round(distance);
 
-        // int distanceKm = Math.round(distance);
-
-        Map<Integer, Float> utilityMapTertiary =
-                dataSetSynPop.getTripLengthDistribution().column("Tertiary");
-
-        int maxDistanceKm = utilityMapTertiary.keySet()
-                .stream()
-                .mapToInt(Integer::intValue)
-                .max()
-                .orElse(0);
-
-        int lookupDistanceKm = Math.min(distanceKm, maxDistanceKm);
-
-        Float utility = utilityMapTertiary.get(lookupDistanceKm);
-
-        if (utility == null || utility <= 0) {
-            return 0.00000001f;
-        }
-
-        return utility;
+        return dataSetSynPop.getTripLengthWeight(
+                originZoneId,
+                "Tertiary",
+                distanceKm
+        );
     }
 
 
@@ -256,31 +408,57 @@ public class AssignSchools {
     }
 
 
-    private int selectPrimarySecondarySchool(int hometaz, int schoolType){
+    private int selectPrimarySecondarySchoolNearest(
+            int hometaz,
+            int schoolType
+    ) {
+        int schooltaz =
+                -2;
 
-        int schooltaz = -2;
+        Integer totalVacantPlaces =
+                numberOfVacantPlacesByType.get(
+                        schoolType
+                );
 
-        Integer totalVacantPlaces = numberOfVacantPlacesByType.get(schoolType);
-        Map<Integer, Integer> candidateZones = schoolCapacityMap.get(schoolType);
+        Map<Integer, Integer> candidateZones =
+                schoolCapacityMap.get(
+                        schoolType
+                );
 
-        if (totalVacantPlaces == null || totalVacantPlaces <= 0 ||
-                candidateZones == null || candidateZones.isEmpty()) {
+        if (totalVacantPlaces == null ||
+                totalVacantPlaces <= 0 ||
+                candidateZones == null ||
+                candidateZones.isEmpty()) {
             return schooltaz;
         }
 
-        float minDistance = Float.POSITIVE_INFINITY;
+        float minDistance =
+                Float.POSITIVE_INFINITY;
 
         for (Integer zone : new ArrayList<>(candidateZones.keySet())) {
 
-            float distance = getDistanceByZoneIds(hometaz, zone);
+            int remainingCapacity =
+                    candidateZones.get(zone);
 
-            if (Float.isNaN(distance) || Float.isInfinite(distance)) {
+            if (remainingCapacity <= 0) {
+                continue;
+            }
+
+            float distance =
+                    getDistanceByZoneIds(
+                            hometaz,
+                            zone
+                    );
+
+            if (Float.isNaN(distance) ||
+                    Float.isInfinite(distance) ||
+                    distance < 0) {
                 continue;
             }
 
             if (distance < minDistance) {
-                schooltaz = zone;
                 minDistance = distance;
+                schooltaz = zone;
             }
         }
 
@@ -288,7 +466,132 @@ public class AssignSchools {
             return schooltaz;
         }
 
-        consumeSchoolCapacity(schoolType, schooltaz);
+        consumeSchoolCapacity(
+                schoolType,
+                schooltaz
+        );
+
+        assignedStudents++;
+
+        return schooltaz;
+    }
+
+    private int selectPrimarySecondarySchoolTripLengthBased(
+            int hometaz,
+            int schoolType
+    ) {
+        int schooltaz = -2;
+
+        Integer totalVacantPlaces =
+                numberOfVacantPlacesByType.get(
+                        schoolType
+                );
+
+        Map<Integer, Integer> candidateZones =
+                schoolCapacityMap.get(
+                        schoolType
+                );
+
+        if (totalVacantPlaces == null ||
+                totalVacantPlaces <= 0 ||
+                candidateZones == null ||
+                candidateZones.isEmpty()) {
+            return schooltaz;
+        }
+
+        String purpose =
+                getSchoolPurpose(schoolType);
+
+        Map<Integer, Float> probability =
+                new HashMap<>();
+
+        for (Integer zone : new ArrayList<>(candidateZones.keySet())) {
+
+            float distance =
+                    getDistanceByZoneIds(
+                            hometaz,
+                            zone
+                    );
+
+            if (Float.isNaN(distance) ||
+                    Float.isInfinite(distance) ||
+                    distance < 0) {
+                continue;
+            }
+
+            int distanceKm =
+                    Math.round(distance);
+
+            float distanceWeight =
+                    dataSetSynPop.getTripLengthWeight(
+                            hometaz,
+                            purpose,
+                            distanceKm
+                    );
+
+            if (distanceWeight <= 0 ||
+                    Float.isNaN(distanceWeight) ||
+                    Float.isInfinite(distanceWeight)) {
+                continue;
+            }
+
+            String tripLengthRegion =
+                    dataSetSynPop.getTripLengthRegionForZone(
+                            hometaz
+                    );
+
+            String sampleKey =
+                    tripLengthRegion +
+                            "_" +
+                            purpose;
+
+            if (!printedSchoolWeightSamples.contains(sampleKey)) {
+                printedSchoolWeightSamples.add(sampleKey);
+
+                logger.info(
+                        "School allocation uses trip length distribution: region=" +
+                                tripLengthRegion +
+                                ", purpose=" +
+                                purpose +
+                                ", homeTaz=" +
+                                hometaz +
+                                ", schoolTaz=" +
+                                zone +
+                                ", distanceKm=" +
+                                distanceKm +
+                                ", distanceWeight=" +
+                                distanceWeight
+                );
+            }
+
+            int remainingCapacity =
+                    candidateZones.get(zone);
+
+            if (remainingCapacity <= 0) {
+                continue;
+            }
+
+            probability.put(
+                    zone,
+                    distanceWeight * remainingCapacity
+            );
+        }
+
+        if (probability.isEmpty()) {
+            return schooltaz;
+        }
+
+        schooltaz =
+                SiloUtil.select(probability);
+
+        if (schooltaz <= 0) {
+            return schooltaz;
+        }
+
+        consumeSchoolCapacity(
+                schoolType,
+                schooltaz
+        );
 
         assignedStudents++;
 
@@ -338,6 +641,20 @@ public class AssignSchools {
                 }
             }
         }
+        logger.info(
+                "School capacity candidate zones loaded: " +
+                        schoolCapacityMap
+                                .values()
+                                .stream()
+                                .flatMap(map -> map.keySet().stream())
+                                .distinct()
+                                .count()
+        );
+
+        logger.info(
+                "School vacant places by type: " +
+                        numberOfVacantPlacesByType
+        );
     }
 
     public boolean obtainLicense(Gender gender, int age){

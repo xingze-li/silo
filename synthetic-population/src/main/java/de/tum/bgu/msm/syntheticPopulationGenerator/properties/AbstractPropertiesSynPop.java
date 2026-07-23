@@ -45,6 +45,9 @@ public abstract class AbstractPropertiesSynPop {
     public double gammaUniversity;
     public double[] incomeProbability;
     public String tripLengthDistributionFileName;
+    public String tripLengthDistributionMunichFileName;
+    public String tripLengthDistributionAugsburgFileName;
+    public String tripLengthDistributionOtherFileName;
     public String householdsFileName;
     public String personsFileName;
     public String dwellingsFileName;

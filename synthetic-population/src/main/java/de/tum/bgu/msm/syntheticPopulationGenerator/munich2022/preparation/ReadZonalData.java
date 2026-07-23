@@ -4,6 +4,7 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Table;
 import de.tum.bgu.msm.common.datafile.TableDataSet;
 import de.tum.bgu.msm.common.matrix.Matrix;
+import java.util.stream.Collectors;
 //import de.tum.bgu.msm.data.dwelling.DefaultDwellingTypes;
 import de.tum.bgu.msm.data.AreaTypes;
 import de.tum.bgu.msm.data.Id;
@@ -34,6 +35,39 @@ public class ReadZonalData {
     private static final Logger logger = LogManager.getLogger(ReadZonalData.class);
 
     private final DataSetSynPop dataSetSynPop;
+
+    private static final Set<Integer> MUNICH_COUNTIES =
+            Set.of(
+                    9175,
+                    9188,
+                    9184,
+                    9178,
+                    9174,
+                    9162,
+                    9177,
+                    9179
+            );
+
+    private static final Set<Integer> AUGSBURG_COUNTIES =
+            Set.of(
+                    9761,
+                    9771,
+                    9772
+            );
+
+    private String classifyTripLengthRegion(
+            int county
+    ) {
+        if (MUNICH_COUNTIES.contains(county)) {
+            return "Munich";
+        }
+
+        if (AUGSBURG_COUNTIES.contains(county)) {
+            return "Augsburg";
+        }
+
+        return "Other";
+    }
 
     public ReadZonalData(DataSetSynPop dataSetSynPop){
         this.dataSetSynPop = dataSetSynPop;
@@ -113,6 +147,7 @@ public class ReadZonalData {
 
     private void readZones(){
         //TAZ attributes
+        Map<Integer, String> tripLengthRegionByTaz = new HashMap<>();
         HashMap<Integer, int[]> cityTAZ = new HashMap<>();
         Map<Integer, Id> zones = new LinkedHashMap<>();
         Map<Integer, Map<Integer, Float>> probabilityZone = new HashMap<>();
@@ -128,6 +163,7 @@ public class ReadZonalData {
         for (int i = 1; i <= zoneAttributes.getRowCount(); i++){
             int city = (int) zoneAttributes.getValueAt(i,"ID_city");
             int taz = (int) zoneAttributes.getValueAt(i,"ID_cell");
+            int county = (int) zoneAttributes.getValueAt(i, "ID_county");
             float probability = zoneAttributes.getValueAt(i, "population");
             int priceEFHFreistehend = (int) zoneAttributes.getValueAt(i,"ddEFHFreistehend");
             int priceEFHDoppelhaus = (int) zoneAttributes.getValueAt(i,"ddEFHDoppelhaus");
@@ -137,6 +173,9 @@ public class ReadZonalData {
             int capacitySecondary = (int)zoneAttributes.getValueAt(i,"capacitySecondary");
             int capacityTertiary = (int)zoneAttributes.getValueAt(i,"capacityTertiary");
             int bbsr = (int)zoneAttributes.getValueAt(i,"BBSR");
+            String tripLengthRegion = classifyTripLengthRegion(county);
+            tripLengthRegionByTaz.put(taz, tripLengthRegion);
+
             if (!tazs.contains(taz)) {
                 tazs.add(taz);
             }
@@ -178,6 +217,23 @@ public class ReadZonalData {
         dataSetSynPop.setTazs(tazs);
         dataSetSynPop.setTazIDs(tazs.stream().mapToInt(i -> i).toArray());
         this.dataSetSynPop.setZones(zones);
+        dataSetSynPop.setTripLengthRegionByTaz(tripLengthRegionByTaz);
+
+        Map<String, Long> tazCountByTripLengthRegion =
+                tripLengthRegionByTaz
+                        .values()
+                        .stream()
+                        .collect(
+                                java.util.stream.Collectors.groupingBy(
+                                        region -> region,
+                                        java.util.stream.Collectors.counting()
+                                )
+                        );
+
+        logger.info(
+                "Trip length regions by TAZ: " +
+                        tazCountByTripLengthRegion
+        );
     }
 
 //    private void readZones(){
@@ -281,43 +337,287 @@ public class ReadZonalData {
         logger.info("   Read Parquet distance matrix from " + parquetFile);
     }
 
+    private Table<Integer, String, Float> readTripLengthFrequencyDistributionFile(
+            String fileName
+    ) {
+        logger.info(
+                "   Reading trip length frequency distribution: " +
+                        fileName
+        );
 
-    private void readTripLengthFrequencyDistribution(){
-        logger.info("   Starting to read trip length frequency distributions");
-        String fileName = PropertiesSynPop.get().main.tripLengthDistributionFileName;
+        Table<Integer, String, Float> frequencies =
+                HashBasedTable.create();
+
         String recString = "";
-        Table<Integer, String, Float> frequencies = HashBasedTable.create();
         int recCount = 0;
+
         try {
-            BufferedReader in = new BufferedReader(new FileReader(fileName));
+            BufferedReader in =
+                    new BufferedReader(
+                            new FileReader(fileName)
+                    );
+
             recString = in.readLine();
 
-            // read header
-            String[] header = recString.split(",");
-            int posId = SiloUtil.findPositionInArray("km", header);
-            int posHBW = SiloUtil.findPositionInArray("HBW",header);
-            int posPrimarySecondary = SiloUtil.findPositionInArray("Primary",header);
-            int posTertiary = SiloUtil.findPositionInArray("Tertiary",header);
+            String[] header =
+                    recString.split(",");
 
-            // read line
+            int posKm =
+                    SiloUtil.findPositionInArray(
+                            "km",
+                            header
+                    );
+
+            int posHBW =
+                    SiloUtil.findPositionInArray(
+                            "HBW",
+                            header
+                    );
+
+            int posPrimary =
+                    SiloUtil.findPositionInArray(
+                            "Primary",
+                            header
+                    );
+
+            int posSecondary =
+                    SiloUtil.findPositionInArray(
+                            "Secondary",
+                            header
+                    );
+
+            int posTertiary =
+                    SiloUtil.findPositionInArray(
+                            "Tertiary",
+                            header
+                    );
+
             while ((recString = in.readLine()) != null) {
+
                 recCount++;
-                String[] lineElements = recString.split(",");
-                int length  = Integer.parseInt(lineElements[posId]);
-                float hbw  = Float.parseFloat(lineElements[posHBW]);
-                float primary  = Float.parseFloat(lineElements[posPrimarySecondary]);
-                float tertiary  = Float.parseFloat(lineElements[posTertiary]);
-                frequencies.put(length,"HBW", hbw);
-                frequencies.put(length, "Primary", primary);
-                frequencies.put(length, "Tertiary", tertiary);
+
+                String[] lineElements =
+                        recString.split(",");
+
+                int length =
+                        Integer.parseInt(
+                                lineElements[posKm].trim()
+                        );
+
+                if (posHBW >= 0) {
+                    frequencies.put(
+                            length,
+                            "HBW",
+                            Float.parseFloat(lineElements[posHBW].trim())
+                    );
+                }
+
+                if (posPrimary >= 0) {
+                    frequencies.put(
+                            length,
+                            "Primary",
+                            Float.parseFloat(lineElements[posPrimary].trim())
+                    );
+                }
+
+                if (posSecondary >= 0) {
+                    frequencies.put(
+                            length,
+                            "Secondary",
+                            Float.parseFloat(lineElements[posSecondary].trim())
+                    );
+                }
+
+                if (posTertiary >= 0) {
+                    frequencies.put(
+                            length,
+                            "Tertiary",
+                            Float.parseFloat(lineElements[posTertiary].trim())
+                    );
+                }
             }
 
+            in.close();
 
         } catch (IOException e) {
-            logger.fatal("IO Exception caught reading synpop job file: " + fileName);
-            logger.fatal("recCount = " + recCount + ", recString = <" + recString + ">");
+            logger.fatal(
+                    "IO Exception caught reading trip length distribution file: " +
+                            fileName
+            );
+            logger.fatal(
+                    "recCount = " +
+                            recCount +
+                            ", recString = <" +
+                            recString +
+                            ">"
+            );
+            throw new RuntimeException(e);
         }
-        dataSetSynPop.setTripLengthDistribution(frequencies);
 
+        return frequencies;
+    }
+
+
+//    private void readTripLengthFrequencyDistribution(){
+//        logger.info("   Starting to read trip length frequency distributions");
+//        String fileName = PropertiesSynPop.get().main.tripLengthDistributionFileName;
+//        String recString = "";
+//        Table<Integer, String, Float> frequencies = HashBasedTable.create();
+//        int recCount = 0;
+//        try {
+//            BufferedReader in = new BufferedReader(new FileReader(fileName));
+//            recString = in.readLine();
+//
+//            // read header
+//            String[] header = recString.split(",");
+//            int posId = SiloUtil.findPositionInArray("km", header);
+//            int posHBW = SiloUtil.findPositionInArray("HBW",header);
+//            int posPrimarySecondary = SiloUtil.findPositionInArray("Primary",header);
+//            int posTertiary = SiloUtil.findPositionInArray("Tertiary",header);
+//
+//            // read line
+//            while ((recString = in.readLine()) != null) {
+//                recCount++;
+//                String[] lineElements = recString.split(",");
+//                int length  = Integer.parseInt(lineElements[posId]);
+//                float hbw  = Float.parseFloat(lineElements[posHBW]);
+//                float primary  = Float.parseFloat(lineElements[posPrimarySecondary]);
+//                float tertiary  = Float.parseFloat(lineElements[posTertiary]);
+//                frequencies.put(length,"HBW", hbw);
+//                frequencies.put(length, "Primary", primary);
+//                frequencies.put(length, "Tertiary", tertiary);
+//            }
+//
+//
+//        } catch (IOException e) {
+//            logger.fatal("IO Exception caught reading synpop job file: " + fileName);
+//            logger.fatal("recCount = " + recCount + ", recString = <" + recString + ">");
+//        }
+//        dataSetSynPop.setTripLengthDistribution(frequencies);
+//
+//    }
+
+    private void readTripLengthFrequencyDistribution() {
+
+        logger.info(
+                "   Starting to read regional trip length frequency distributions"
+        );
+
+        Map<String, Table<Integer, String, Float>> distributionsByRegion =
+                new HashMap<>();
+
+        Table<Integer, String, Float> munichDistribution =
+                readTripLengthFrequencyDistributionFile(
+                        PropertiesSynPop.get()
+                                .main
+                                .tripLengthDistributionMunichFileName
+                );
+
+        Table<Integer, String, Float> augsburgDistribution =
+                readTripLengthFrequencyDistributionFile(
+                        PropertiesSynPop.get()
+                                .main
+                                .tripLengthDistributionAugsburgFileName
+                );
+
+        Table<Integer, String, Float> otherDistribution =
+                readTripLengthFrequencyDistributionFile(
+                        PropertiesSynPop.get()
+                                .main
+                                .tripLengthDistributionOtherFileName
+                );
+
+        distributionsByRegion.put(
+                "Munich",
+                munichDistribution
+        );
+
+        distributionsByRegion.put(
+                "Augsburg",
+                augsburgDistribution
+        );
+
+        distributionsByRegion.put(
+                "Other",
+                otherDistribution
+        );
+
+        logTripLengthDistributionSummary(
+                "Munich",
+                munichDistribution
+        );
+
+        logTripLengthDistributionSummary(
+                "Augsburg",
+                augsburgDistribution
+        );
+
+        logTripLengthDistributionSummary(
+                "Other",
+                otherDistribution
+        );
+
+        dataSetSynPop.setTripLengthDistributionByRegion(
+                distributionsByRegion
+        );
+
+        // keep the old interface
+        dataSetSynPop.setTripLengthDistribution(
+                otherDistribution
+        );
+    }
+
+    private void logTripLengthDistributionSummary(
+            String region,
+            Table<Integer, String, Float> distribution
+    ) {
+        if (distribution == null || distribution.isEmpty()) {
+            logger.warn(
+                    "Trip length distribution for " +
+                            region +
+                            " is empty."
+            );
+            return;
+        }
+
+        int minKm =
+                distribution
+                        .rowKeySet()
+                        .stream()
+                        .mapToInt(Integer::intValue)
+                        .min()
+                        .orElse(-1);
+
+        int maxKm =
+                distribution
+                        .rowKeySet()
+                        .stream()
+                        .mapToInt(Integer::intValue)
+                        .max()
+                        .orElse(-1);
+
+        logger.info(
+                "Trip length distribution loaded for " +
+                        region +
+                        ": minKm=" +
+                        minKm +
+                        ", maxKm=" +
+                        maxKm +
+                        ", columns=" +
+                        distribution.columnKeySet()
+        );
+
+        logger.info(
+                "Trip length sample for " +
+                        region +
+                        ": HBW[5]=" +
+                        distribution.get(5, "HBW") +
+                        ", Primary[5]=" +
+                        distribution.get(5, "Primary") +
+                        ", Secondary[5]=" +
+                        distribution.get(5, "Secondary") +
+                        ", Tertiary[5]=" +
+                        distribution.get(5, "Tertiary")
+        );
     }
 }
