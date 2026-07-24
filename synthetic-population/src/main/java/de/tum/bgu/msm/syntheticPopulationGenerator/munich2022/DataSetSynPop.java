@@ -50,6 +50,7 @@ public class DataSetSynPop {
     private Table<Integer, String, Float> tripLengthDistribution;
     private Map<Integer, String> tripLengthRegionByTaz;
     private Map<String, Table<Integer, String, Float>> tripLengthDistributionByRegion;
+    private final Map<String, float[]> tripLengthWeightCache = new HashMap<>();
     private ArrayList<Integer> municipalitiesWithZeroPopulation;
 
     private IndexedDoubleMatrix2D distanceTazToTaz;
@@ -357,18 +358,70 @@ public class DataSetSynPop {
             String purpose,
             int distanceKm
     ) {
+        String region =
+                getTripLengthRegionForZone(
+                        homeTaz
+                );
+
+        float[] weights =
+                getCachedTripLengthWeights(
+                        region,
+                        purpose
+                );
+
+        if (weights == null ||
+                weights.length == 0) {
+            return 0.00000001f;
+        }
+
+        if (distanceKm < 0) {
+            return 0.00000001f;
+        }
+
+        if (distanceKm >= weights.length) {
+            return 0.00000001f;
+        }
+
+        return weights[distanceKm];
+    }
+
+    private float[] getCachedTripLengthWeights(
+            String region,
+            String purpose
+    ) {
+        String key =
+                region + "_" + purpose;
+
+        float[] cached =
+                tripLengthWeightCache.get(key);
+
+        if (cached != null) {
+            return cached;
+        }
+
+        if (tripLengthDistributionByRegion == null ||
+                tripLengthDistributionByRegion.isEmpty()) {
+            return null;
+        }
+
         Table<Integer, String, Float> distribution =
-                getTripLengthDistributionForZone(homeTaz);
+                tripLengthDistributionByRegion.get(region);
 
         if (distribution == null) {
-            return 0.00000001f;
+            distribution =
+                    tripLengthDistributionByRegion.get("Other");
+        }
+
+        if (distribution == null) {
+            return null;
         }
 
         Map<Integer, Float> weightByDistance =
                 distribution.column(purpose);
 
-        if (weightByDistance == null || weightByDistance.isEmpty()) {
-            return 0.00000001f;
+        if (weightByDistance == null ||
+                weightByDistance.isEmpty()) {
+            return null;
         }
 
         int maxDistance =
@@ -379,20 +432,37 @@ public class DataSetSynPop {
                         .max()
                         .orElse(0);
 
-        int lookupDistance =
-                Math.max(
-                        0,
-                        Math.min(distanceKm, maxDistance)
-                );
+        float[] weights =
+                new float[maxDistance + 1];
 
-        Float weight =
-                weightByDistance.get(lookupDistance);
+        Arrays.fill(
+                weights,
+                0.00000001f
+        );
 
-        if (weight == null || weight <= 0) {
-            return 0.00000001f;
+        for (Map.Entry<Integer, Float> entry :
+                weightByDistance.entrySet()) {
+
+            int distance =
+                    entry.getKey();
+
+            float weight =
+                    entry.getValue();
+
+            if (distance >= 0 &&
+                    distance < weights.length &&
+                    weight > 0) {
+                weights[distance] =
+                        weight;
+            }
         }
 
-        return weight;
+        tripLengthWeightCache.put(
+                key,
+                weights
+        );
+
+        return weights;
     }
 
     public TableDataSet getHouseholdDataSet() {
