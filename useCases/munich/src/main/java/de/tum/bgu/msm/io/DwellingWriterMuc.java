@@ -29,7 +29,7 @@ public class DwellingWriterMuc implements DwellingWriter {
 
         PrintWriter pwd = SiloUtil.openFileForSequentialWriting(path, false);
 
-        pwd.print("id,zone,municipality,hhId,type,bedrooms,quality,monthlyCost,year,coordX,coordY");
+        pwd.print("id,zone,municipality,hhId,type,bedrooms,quality,monthlyCost,yearBuilt,usage,coordX,coordY");
 
         pwd.print(",d.buildingSize");
         pwd.print(",d.rent");
@@ -79,6 +79,8 @@ public class DwellingWriterMuc implements DwellingWriter {
             pwd.print(",");
 
             pwd.print(dd.getYearBuilt());
+            pwd.print(",");
+            pwd.print(dd.getUsage());
 
             Coordinate coordinate = dd.getCoordinate();
 

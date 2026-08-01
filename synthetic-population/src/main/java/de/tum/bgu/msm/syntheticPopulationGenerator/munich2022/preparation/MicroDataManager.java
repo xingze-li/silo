@@ -45,6 +45,10 @@ public class MicroDataManager {
     public DwellingTypeMunich translateDwellingType(int dwellingTypeCode) {
 
         try {
+        if (dwellingTypeCode == 0) {
+            DwellingTypeMunich[] dwellingTypes = DwellingTypeMunich.values();
+            return dwellingTypes[SiloUtil.getRandomObject().nextInt(dwellingTypes.length)];
+        }
             return DwellingTypeMunich.valueOf(dwellingTypeCode);
         } catch (IllegalArgumentException e) {
             return DwellingTypeMunich.MFH;
@@ -443,20 +447,17 @@ public class MicroDataManager {
     }
 
 
-    public int guessDwellingQuality(int heatingDistrict, int heatingCentral, int heatingEnergy, int additionalHeating, int yearBuilt){
+    public int guessDwellingQuality(int heatingDistrict, int heatingCentral, int heatingEnergy, int additionalHeating, int yearBracket){
         //guess quality of dwelling based on construction year and heating characteristics.
         //kitchen and bathroom quality are not coded on the micro data
         int quality = PropertiesSynPop.get().main.numberofQualityLevels;
         if ((heatingDistrict != 1) & (heatingCentral != 1)) quality--; //reduce quality if not central or district heating
         if ((heatingEnergy > 4)|(heatingEnergy < 0)) quality--; //reduce quality if energy is not gas, electricity or heating oil (i.e. coal, wood, biomass, solar energy)
         if (additionalHeating >= 2) quality++; //increase quality if there is additional heating in the house (regardless the used energy)
-        if (yearBuilt > 0) {
-            float[] deteriorationProbability = {
-                    0.9f, 0.8f, 0.6f, 0.3f, 0.12f,
-                    0.08f, 0.05f, 0.04f, 0.04f
-            };
+        if (yearBracket > 0) {
+            float[] deteriorationProbability = {0f, 0.85f, 0.45f, 0.10f, 0.045f};
 
-            int index = Math.max(0, Math.min(yearBuilt - 1, deteriorationProbability.length - 1));
+            int index = Math.min(yearBracket, deteriorationProbability.length - 1);
             float prob = deteriorationProbability[index];
 
             quality = quality - SiloUtil.select(new double[]{1 - prob, prob});
@@ -511,14 +512,28 @@ public class MicroDataManager {
         return guessBedrooms(floorSpace);
     }
 
-    public DwellingUsage translateDwellingUsage(int use){
-        DwellingUsage usage = DwellingUsage.OWNED;
-        if ((use == 3)|(use == 4)){
-            usage = DwellingUsage.RENTED;
-        } else if (use == 5){
-            usage = DwellingUsage.VACANT;
+    public DwellingUsage translateDwellingUsage(int use, float rent) {
+        if (use == 1) {
+            return DwellingUsage.OWNED;
+        } else if (use == 2) {
+            return DwellingUsage.RENTED;
+        } else if (use == 5) {
+            return DwellingUsage.VACANT;
+        } else if (use == 0) {
+            if (rent >= 0) {
+                return DwellingUsage.RENTED;
+            } else if (Float.compare(rent, -5f) == 0) {
+                return DwellingUsage.OWNED;
+            } else if (Float.compare(rent, -6f) == 0) {
+                return DwellingUsage.RENTED;
+            } else if (Float.compare(rent, -9f) == 0) {
+                return SiloUtil.getRandomNumberAsDouble() < 0.5
+                        ? DwellingUsage.RENTED
+                        : DwellingUsage.OWNED;
+            }
         }
-        return usage;
+
+        return DwellingUsage.GROUP_QUARTER_OR_DEFAULT;
     }
 
     public int guessPrice(float brw, int quality, int size, DwellingUsage use) {
@@ -591,50 +606,41 @@ public class MicroDataManager {
 //        return floorSpaceDwelling;
 //    }
 
-    public int dwellingYearBracket(int year){
-
-        int yearBracket ;
-        if (year < 1919){
-            yearBracket = 1;
-        } else if (year < 1949){
-            yearBracket = 2;
-        } else if (year < 1979){
-            yearBracket = 3;
-        } else if (year < 1991){
-            yearBracket = 4;
-        } else if (year < 2001){
-            yearBracket = 5;
-        } else if (year < 2011){
-            yearBracket = 6;
-        } else if (year < 2020){
-            yearBracket = 7;
-        }else {
-            yearBracket = 10;
+    public int dwellingYearBracket(int yearBuilt) {
+        if (yearBuilt <= 0) {
+            return 0;
+        } else if (yearBuilt < 1949) {
+            return 1;
+        } else if (yearBuilt <= 1990) {
+            return 2;
+        } else if (yearBuilt <= 2010) {
+            return 3;
+        } else {
+            return 4;
         }
-        return yearBracket;
     }
 
     public int dwellingYearfromBracket(int yearBracket) {
+        int baseYear =
+                de.tum.bgu.msm.properties.Properties.get().main.baseYear;
 
-        int year;
-        int baseYear = de.tum.bgu.msm.properties.Properties.get().main.baseYear;
-        int last_year_gap = baseYear - 2020;
-        int max_year_gap = baseYear - 1900;
-        if ((yearBracket < 3 )&&(yearBracket > 0) ) {
-            year = (int) (1900 + SiloUtil.getRandomNumberAsFloat() * 49);
-        } else if (yearBracket < 4) {
-            year = (int) (1949 + SiloUtil.getRandomNumberAsFloat() * 30);
-        } else if (yearBracket < 6) {
-            year = (int) (1979 + SiloUtil.getRandomNumberAsFloat() * 22);
-        } else if (yearBracket < 8) {
-            year = (int) (2001 + SiloUtil.getRandomNumberAsFloat() * 19);
-        } else if (yearBracket == 10) {
-            year = (int) (2020 + SiloUtil.getRandomNumberAsFloat() * (last_year_gap+1));
-        } else {
-            year = (int) (1900 + SiloUtil.getRandomNumberAsFloat() * (max_year_gap+1));
+        return switch (yearBracket) {
+            case 0 -> randomYear(1900, baseYear);
+            case 1 -> randomYear(1900, 1948);
+            case 2 -> randomYear(1949, 1990);
+            case 3 -> randomYear(1991, 2010);
+            case 4 -> randomYear(2011, Math.max(2011, baseYear));
+            default -> 0;
+        };
+    }
+
+    private int randomYear(int minimum, int maximum) {
+        if (maximum <= minimum) {
+            return minimum;
         }
 
-        return year;
+        return minimum
+                + SiloUtil.getRandomObject().nextInt(maximum - minimum + 1);
     }
 
     public String translateJobType(int wz08Code) {
