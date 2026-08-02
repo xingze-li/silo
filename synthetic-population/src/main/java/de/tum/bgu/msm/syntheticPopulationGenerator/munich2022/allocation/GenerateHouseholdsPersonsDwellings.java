@@ -401,7 +401,10 @@ public class GenerateHouseholdsPersonsDwellings {
                 dataSetSynPop.getDwellingDataSet().getValueAt(hhSelected, "d.use")
         );
 
-        DwellingUsage usage = microDataManager.translateDwellingUsage(useInteger);
+        DwellingUsage usage = microDataManager.translateDwellingUsage(
+                useInteger,
+                dataSetSynPop.getDwellingDataSet().getValueAt(hhSelected, "d.rent")
+        );
 
         int ddHeatingEnergy = Math.round(
                 dataSetSynPop.getDwellingDataSet().getValueAt(hhSelected, "d.heatingEnergy")
