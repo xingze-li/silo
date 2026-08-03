@@ -380,11 +380,11 @@ private int[] selectWorkplace(int homeTaz, int selectedJobType) {
         }
 
         probs[index] =
-                distanceWeight *
+                Math.exp(distanceWeight *
                         Math.pow(
                                 numberVacant,
                                 0.45
-                        );
+                        ));
     }
 
     double sumProbability =
