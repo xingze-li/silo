@@ -69,6 +69,8 @@ public class ReadZonalData {
         readCities();
         if (PropertiesSynPop.get().main.runAllocation || PropertiesSynPop.get().main.runMicrolocation) {
             readZones();
+        }
+        if (PropertiesSynPop.get().main.runJobAllocation) {
             readDistanceMatrix();
             readTripLengthFrequencyDistribution();
         }
@@ -159,19 +161,30 @@ public class ReadZonalData {
         } else {
             zoneAttributes = PropertiesSynPop.get().main.cellsMatrixBoroughs;
         }
+        String zoneIdColumn = findColumn(zoneAttributes, "ID_cell", "Zone");
+        String cityColumn = findColumn(zoneAttributes, "ID_city", "Gemeinde_ID");
+        String countyColumn = findColumn(zoneAttributes, "ID_county", "Landkreis_ID");
+        String populationColumn = findOptionalColumn(zoneAttributes, "population", "Population");
+        String areaTypeColumn = findColumn(zoneAttributes, "BBSR", "BBSR_Type");
+        if (populationColumn == null) {
+            logger.warn("The TAZ definition has no population column. Using equal allocation weights within each municipality.");
+        }
+        if (findOptionalColumn(zoneAttributes, "ddEFHFreistehend") == null) {
+            logger.warn("The TAZ definition has no dwelling-price columns. Occupied dwellings will use observed microdata costs; vacant dwellings will use donor costs.");
+        }
         for (int i = 1; i <= zoneAttributes.getRowCount(); i++){
-            int city = (int) zoneAttributes.getValueAt(i,"ID_city");
-            int taz = (int) zoneAttributes.getValueAt(i,"ID_cell");
-            int county = (int) zoneAttributes.getValueAt(i, "ID_county");
-            float probability = zoneAttributes.getValueAt(i, "population");
-            int priceEFHFreistehend = (int) zoneAttributes.getValueAt(i,"ddEFHFreistehend");
-            int priceEFHDoppelhaus = (int) zoneAttributes.getValueAt(i,"ddEFHDoppelhaus");
-            int priceEFHReihenhaus = (int) zoneAttributes.getValueAt(i,"ddEFHReihenhaus");
-            int priceMFH = (int) zoneAttributes.getValueAt(i,"ddMFH");
-            int capacityPrimary = (int)zoneAttributes.getValueAt(i,"capacityPrimary");
-            int capacitySecondary = (int)zoneAttributes.getValueAt(i,"capacitySecondary");
-            int capacityTertiary = (int)zoneAttributes.getValueAt(i,"capacityTertiary");
-            int bbsr = (int)zoneAttributes.getValueAt(i,"BBSR");
+            int city = (int) zoneAttributes.getValueAt(i, cityColumn);
+            int taz = (int) zoneAttributes.getValueAt(i, zoneIdColumn);
+            int county = (int) zoneAttributes.getValueAt(i, countyColumn);
+            float probability = populationColumn == null ? 1f : zoneAttributes.getValueAt(i, populationColumn);
+            int priceEFHFreistehend = getOptionalInt(zoneAttributes, i,"ddEFHFreistehend");
+            int priceEFHDoppelhaus = getOptionalInt(zoneAttributes, i,"ddEFHDoppelhaus");
+            int priceEFHReihenhaus = getOptionalInt(zoneAttributes, i,"ddEFHReihenhaus");
+            int priceMFH = getOptionalInt(zoneAttributes, i,"ddMFH");
+            int capacityPrimary = getOptionalInt(zoneAttributes, i, "capacityPrimary");
+            int capacitySecondary = getOptionalInt(zoneAttributes, i, "capacitySecondary");
+            int capacityTertiary = getOptionalInt(zoneAttributes, i, "capacityTertiary");
+            int bbsr = (int)zoneAttributes.getValueAt(i, areaTypeColumn);
             String tripLengthRegion = classifyTripLengthRegion(county);
             tripLengthRegionByTaz.put(taz, tripLengthRegion);
 
@@ -233,6 +246,32 @@ public class ReadZonalData {
                 "Trip length regions by TAZ: " +
                         tazCountByTripLengthRegion
         );
+    }
+
+    private String findColumn(TableDataSet table, String... candidates) {
+        String column = findOptionalColumn(table, candidates);
+        if (column != null) {
+            return column;
+        }
+        throw new IllegalArgumentException(
+                "None of the required columns " + Arrays.toString(candidates) + " exists in the TAZ definition.");
+    }
+
+    private String findOptionalColumn(TableDataSet table, String... candidates) {
+        List<String> labels = Arrays.asList(table.getColumnLabels());
+        for (String candidate : candidates) {
+            if (labels.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private int getOptionalInt(TableDataSet table, int row, String column) {
+        if (Arrays.asList(table.getColumnLabels()).contains(column)) {
+            return Math.round(table.getValueAt(row, column));
+        }
+        return 0;
     }
 
 //    private void readZones(){

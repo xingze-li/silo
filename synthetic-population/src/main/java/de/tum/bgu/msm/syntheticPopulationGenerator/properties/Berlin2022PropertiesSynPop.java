@@ -1,9 +1,11 @@
 package de.tum.bgu.msm.syntheticPopulationGenerator.properties;
 
 import de.tum.bgu.msm.properties.PropertiesUtil;
+import de.tum.bgu.msm.io.GeoDataReaderBerlinBrandenburg;
 import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.commons.math3.distribution.GammaDistribution;
 
+import java.util.Arrays;
 import java.util.ResourceBundle;
 
 public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
@@ -74,12 +76,12 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
         selectedMunicipalities.buildIndex(selectedMunicipalities.getColumnPosition("ID_city"));
 
         if (runAllocation || runMicrolocation) {
-            cellsMatrix = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(
+            cellsMatrix = GeoDataReaderBerlinBrandenburg.readZoneTable(PropertiesUtil.getStringProperty(
                     bundle,
                     "taz.definition",
-                    "input/zoneSystem2022.csv"
+                    "input/syntheticPopulation/input2022_zone/zoneAttributes_Berlin2022_5types_with_school_capacity.csv"
             ));
-            cellsMatrix.buildIndex(cellsMatrix.getColumnPosition("Zone"));
+            cellsMatrix.buildIndex(findColumn(cellsMatrix, "ID_cell", "Zone"));
         }
 
         omxFileName = PropertiesUtil.getStringProperty(bundle, "distanceODmatrix", "input/syntheticPopulation/skim_car.parquet");
@@ -145,5 +147,16 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
         fullTimeFileName = PropertiesUtil.getStringProperty(bundle, "fullTime.coefficient.table", "input/syntheticPopulation/proportionFullTime_5types.csv");
         durationFileName = PropertiesUtil.getStringProperty(bundle, "duration.coefficient.table", "input/syntheticPopulation/mandActDurationDistributionTable.csv");
         startTimeFileName = PropertiesUtil.getStringProperty(bundle, "start.time.coefficient.table", "input/syntheticPopulation/mandActsStartTimeDistributionByDurationSegmentTable.csv");
+    }
+
+    private int findColumn(de.tum.bgu.msm.common.datafile.TableDataSet table, String... candidates) {
+        java.util.List<String> labels = Arrays.asList(table.getColumnLabels());
+        for (String candidate : candidates) {
+            if (labels.contains(candidate)) {
+                return table.getColumnPosition(candidate);
+            }
+        }
+        throw new IllegalArgumentException(
+                "TAZ definition must contain one of these columns: " + String.join(", ", candidates));
     }
 }
