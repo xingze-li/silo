@@ -76,8 +76,54 @@ public class GenerateVacantDwellings {
 
     public void run() {
         logger.info("Running module: vacant dwelling generation");
+        validateInputs();
         initializeOccupiedDwellingDistributions();
         generateVacantDwellings();
+    }
+
+    private void validateInputs() {
+        Set<String> availableColumns = new HashSet<>(Arrays.asList(
+                PropertiesSynPop.get().main.marginalsMunicipality.getColumnLabels()
+        ));
+
+        List<String> requiredColumns = new ArrayList<>();
+        requiredColumns.add("ID_city");
+        requiredColumns.add("d.vacant");
+        requiredColumns.addAll(Arrays.asList(VACANT_TYPE_COLUMNS));
+        requiredColumns.addAll(Arrays.asList(VACANT_YEAR_COLUMNS));
+
+        List<String> missingColumns = new ArrayList<>();
+        for (String column : requiredColumns) {
+            if (!availableColumns.contains(column)) {
+                missingColumns.add(column);
+            }
+        }
+
+        if (!missingColumns.isEmpty()) {
+            throw new IllegalStateException(
+                    "Vacant dwelling generation requires missing municipality marginal columns: " +
+                            missingColumns
+            );
+        }
+
+        for (int municipality : dataSetSynPop.getMunicipalities()) {
+            float target = getMarginal(municipality, "d.vacant");
+            if (!Float.isFinite(target) || target < 0) {
+                throw new IllegalStateException(
+                        "Municipality " + municipality +
+                                " has invalid d.vacant target " + target + "."
+                );
+            }
+
+            Map<Integer, Float> zoneWeights =
+                    dataSetSynPop.getProbabilityZone().get(municipality);
+            if (target > 0 && (zoneWeights == null || zoneWeights.isEmpty())) {
+                throw new IllegalStateException(
+                        "Municipality " + municipality +
+                                " has vacant dwellings but no TAZ allocation weights."
+                );
+            }
+        }
     }
 
     private void initializeOccupiedDwellingDistributions() {
@@ -124,9 +170,13 @@ public class GenerateVacantDwellings {
     }
 
     private void generateVacantDwellings() {
+        int totalTargetVacant = 0;
+        int totalGeneratedVacant = 0;
+
         for (int municipality : dataSetSynPop.getMunicipalities()) {
 
             int targetVacant = Math.max(0, Math.round(getMarginal(municipality, "d.vacant")));
+            totalTargetVacant += targetVacant;
             if (targetVacant == 0) {
                 logger.info("Municipality {}. No vacant dwellings to generate.", municipality);
                 continue;
@@ -208,6 +258,12 @@ public class GenerateVacantDwellings {
                     throw new IllegalStateException("No model zone found for allocated TAZ " + tazSelected);
                 }
                 Coordinate coordinate = zone.getRandomCoordinate(SiloUtil.getRandomObject());
+                if (coordinate == null) {
+                    throw new IllegalStateException(
+                            "Could not generate a coordinate for vacant dwelling " +
+                                    newDwellingId + " in TAZ " + tazSelected + "."
+                    );
+                }
                 Dwelling dwelling = DwellingUtils.getFactory().createDwelling(
                         newDwellingId,
                         tazSelected,
@@ -237,6 +293,7 @@ public class GenerateVacantDwellings {
 
                 realEstateData.addDwelling(dwelling);
                 generated++;
+                totalGeneratedVacant++;
             }
 
             logger.info(
@@ -248,6 +305,16 @@ public class GenerateVacantDwellings {
                     yearCounts
             );
         }
+
+        if (totalGeneratedVacant != totalTargetVacant) {
+            throw new IllegalStateException(
+                    "Vacant dwelling generation did not match its target: target=" +
+                            totalTargetVacant + ", generated=" + totalGeneratedVacant
+            );
+        }
+
+        logger.info("Finished vacant dwelling generation. Target: {}, generated: {}.",
+                totalTargetVacant, totalGeneratedVacant);
     }
 
     private static final String[] VACANT_DONOR_ATTRIBUTES = {
@@ -575,16 +642,25 @@ public class GenerateVacantDwellings {
 
         double draw = SiloUtil.getRandomNumberAsDouble() * total;
         double cumulative = 0.0;
-        int fallbackZone = zoneWeights.keySet().iterator().next();
+        int fallbackZone = -1;
 
         for (Map.Entry<Integer, Float> entry : zoneWeights.entrySet()) {
+            double weight = Math.max(0.0, entry.getValue());
+            if (weight <= 0.0) {
+                continue;
+            }
             fallbackZone = entry.getKey();
-            cumulative += Math.max(0.0, entry.getValue());
-            if (draw <= cumulative) {
+            cumulative += weight;
+            if (draw < cumulative) {
                 return entry.getKey();
             }
         }
 
+        if (fallbackZone < 0) {
+            throw new IllegalStateException(
+                    "No positive TAZ allocation weight found for municipality " + municipality
+            );
+        }
         return fallbackZone;
     }
 

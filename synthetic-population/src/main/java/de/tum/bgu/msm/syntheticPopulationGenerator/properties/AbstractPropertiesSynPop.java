@@ -8,6 +8,7 @@ public abstract class AbstractPropertiesSynPop {
     public String microDataFile;
     public boolean runIPU;
     public boolean runAllocation;
+    public boolean runVacantDwellingGeneration;
     public boolean runJobAllocation;
     public boolean runSchoolAllocation;
     public boolean twoGeographicalAreasIPU;

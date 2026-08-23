@@ -28,7 +28,12 @@ public class Allocation extends ModuleSynPop{
         logger.info("   Started allocation model.");
         if (PropertiesSynPop.get().main.runAllocation) {
             generateHouseholdsPersonsDwellings();
-            generateVacantDwellings();
+            if (PropertiesSynPop.get().main.runVacantDwellingGeneration) {
+                generateVacantDwellings();
+            } else {
+                logger.info("   Vacant dwelling generation is disabled by " +
+                        "run.vacant.dwelling.generation=false.");
+            }
             if (PropertiesSynPop.get().main.runJobAllocation) {
                 generateJobs();
             }

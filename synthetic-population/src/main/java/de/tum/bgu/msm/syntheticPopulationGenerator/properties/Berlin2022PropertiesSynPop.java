@@ -46,6 +46,11 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
 
         runIPU = PropertiesUtil.getBooleanProperty(bundle, "run.ipu.synthetic.pop", true);
         runAllocation = PropertiesUtil.getBooleanProperty(bundle, "run.population.allocation", false);
+        runVacantDwellingGeneration = PropertiesUtil.getBooleanProperty(
+                bundle,
+                "run.vacant.dwelling.generation",
+                true
+        );
         runMicrolocation = PropertiesUtil.getBooleanProperty(bundle, "run.sp.microlocation", true);
         runJobMicrolocation = PropertiesUtil.getBooleanProperty(bundle, "run.job.microlocation", false);
         runSchoolMicrolocation = PropertiesUtil.getBooleanProperty(bundle, "run.school.microlocation", false);
