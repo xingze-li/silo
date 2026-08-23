@@ -7,7 +7,7 @@ import de.tum.bgu.msm.data.household.Household;
 import de.tum.bgu.msm.data.job.Job;
 import de.tum.bgu.msm.data.person.Occupation;
 import de.tum.bgu.msm.data.person.Person;
-import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
+import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.DataSetSynPop;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
 import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;

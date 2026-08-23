@@ -1,10 +1,14 @@
 package de.tum.bgu.msm.syntheticPopulationGenerator.properties;
 
+import de.tum.bgu.msm.common.datafile.TableDataSet;
 import de.tum.bgu.msm.properties.PropertiesUtil;
 import de.tum.bgu.msm.io.GeoDataReaderBerlinBrandenburg;
+import de.tum.bgu.msm.utils.CSVFileReader2;
 import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.commons.math3.distribution.GammaDistribution;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.ResourceBundle;
 
@@ -42,8 +46,9 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
 
         runIPU = PropertiesUtil.getBooleanProperty(bundle, "run.ipu.synthetic.pop", true);
         runAllocation = PropertiesUtil.getBooleanProperty(bundle, "run.population.allocation", false);
-        runMicrolocation = PropertiesUtil.getBooleanProperty(bundle, "run.sp.microlocation", false);
-        runJobAllocation = PropertiesUtil.getBooleanProperty(bundle, "run.job.allocation", false);
+        runMicrolocation = PropertiesUtil.getBooleanProperty(bundle, "run.sp.microlocation", true);
+        runJobMicrolocation = PropertiesUtil.getBooleanProperty(bundle, "run.job.microlocation", false);
+        runJobAllocation = PropertiesUtil.getBooleanProperty(bundle, "run.job.allocation", true);
         runDisability = PropertiesUtil.getBooleanProperty(bundle, "run.disability", false);
 
         twoGeographicalAreasIPU = PropertiesUtil.getBooleanProperty(bundle, "run.ipu.city.and.county", false);
@@ -75,7 +80,7 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
         selectedMunicipalities = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle,"municipalities.list","input/syntheticPopulation/input2022/municipalitiesList.csv"));
         selectedMunicipalities.buildIndex(selectedMunicipalities.getColumnPosition("ID_city"));
 
-        if (runAllocation || runMicrolocation) {
+        if (runAllocation || runMicrolocation || runJobMicrolocation) {
             cellsMatrix = GeoDataReaderBerlinBrandenburg.readZoneTable(PropertiesUtil.getStringProperty(
                     bundle,
                     "taz.definition",
@@ -128,8 +133,14 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
 
         if (runMicrolocation) {
             buildingLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "buildingLocation.list", "input/syntheticPopulation/buildingLocation_2022.csv"));
-            jobLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "jobLocation.list", "input/syntheticPopulation/jobLocation_5types.csv"));
             schoolLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "schoolLocation.list", "input/syntheticPopulation/schoolLocation_2022_crs31468.csv"));
+        }
+        if (runJobMicrolocation) {
+            jobLocationlist = readJobLocationList(PropertiesUtil.getStringProperty(
+                    bundle,
+                    "jobLocation.list",
+                    "input/syntheticPopulation/jobLocation_5types.csv"
+            ));
         }
 
         if (boroughIPU) {
@@ -147,6 +158,19 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
         fullTimeFileName = PropertiesUtil.getStringProperty(bundle, "fullTime.coefficient.table", "input/syntheticPopulation/proportionFullTime_5types.csv");
         durationFileName = PropertiesUtil.getStringProperty(bundle, "duration.coefficient.table", "input/syntheticPopulation/mandActDurationDistributionTable.csv");
         startTimeFileName = PropertiesUtil.getStringProperty(bundle, "start.time.coefficient.table", "input/syntheticPopulation/mandActsStartTimeDistributionByDurationSegmentTable.csv");
+    }
+
+    private TableDataSet readJobLocationList(String fileName) {
+        String[] columnFormats = {
+                "NUMBER", "STRING", "STRING", "NUMBER", "NUMBER", "NUMBER",
+                "NUMBER", "NUMBER", "NUMBER", "NUMBER", "NUMBER"
+        };
+
+        try {
+            return new CSVFileReader2().readFileWithFormats(new File(fileName), columnFormats);
+        } catch (IOException | RuntimeException e) {
+            throw new RuntimeException("Error reading Berlin job-location file " + fileName, e);
+        }
     }
 
     private int findColumn(de.tum.bgu.msm.common.datafile.TableDataSet table, String... candidates) {

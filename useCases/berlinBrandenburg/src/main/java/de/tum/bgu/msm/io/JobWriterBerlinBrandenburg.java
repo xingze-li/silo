@@ -46,14 +46,14 @@ public class JobWriterBerlinBrandenburg implements JobWriter {
 
             Coordinate coordinate = jj.getCoordinate();
             pwj.print(",");
-            pwj.print(coordinate.x);
+            pwj.print(coordinate == null ? -1 : coordinate.x);
             pwj.print(",");
-            pwj.print(coordinate.y);
+            pwj.print(coordinate == null ? -1 : coordinate.y);
 
             pwj.print(",");
-            pwj.print(jj.getStartTimeInSeconds().orElse(-1));
+            pwj.print(getJobAttributeOrDefault(jj, "startTimeInSeconds", -1));
             pwj.print(",");
-            pwj.print(jj.getWorkingTimeInSeconds().orElse(-1));
+            pwj.print(getJobAttributeOrDefault(jj, "workingTimeInSeconds", -1));
 
             pwj.println();
             if (jj.getId() == SiloUtil.trackJj) {
@@ -62,6 +62,10 @@ public class JobWriterBerlinBrandenburg implements JobWriter {
             }
         }
         pwj.close();
+    }
+
+    private Object getJobAttributeOrDefault(Job job, String key, Object defaultValue) {
+        return job.getAttribute(key).orElse(defaultValue);
     }
 }
 

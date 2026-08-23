@@ -29,10 +29,12 @@ import de.tum.bgu.msm.data.travelTimes.TravelTimes;
 import de.tum.bgu.msm.io.DwellingWriterBerlinBrandenburg;
 import de.tum.bgu.msm.io.GeoDataReaderBerlinBrandenburg;
 import de.tum.bgu.msm.io.HouseholdWriterBerlinBrandenburgDisability;
+import de.tum.bgu.msm.io.JobWriterBerlinBrandenburg;
 import de.tum.bgu.msm.io.PersonWriterBerlinBrandenburg;
 import de.tum.bgu.msm.io.input.GeoDataReader;
 import de.tum.bgu.msm.io.output.DwellingWriter;
 import de.tum.bgu.msm.io.output.HouseholdWriter;
+import de.tum.bgu.msm.io.output.JobWriter;
 import de.tum.bgu.msm.io.output.PersonWriter;
 import de.tum.bgu.msm.models.modeChoice.SimpleCommuteModeChoice;
 import de.tum.bgu.msm.properties.Properties;
@@ -42,6 +44,7 @@ import de.tum.bgu.msm.schools.SchoolData;
 import de.tum.bgu.msm.schools.SchoolDataImpl;
 import de.tum.bgu.msm.syntheticPopulationGenerator.SyntheticPopI;
 import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.allocation.Allocation;
+import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.microlocation.GenerateJobMicrolocation;
 import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.optimization.Optimization;
 import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.preparation.Preparation;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
@@ -86,6 +89,15 @@ public class SyntheticPopDe implements SyntheticPopI {
 
         logger.info("Running Module: Population allocation");
         new Allocation(dataSetSynPop, dataContainer).run();
+
+        if (PropertiesSynPop.get().main.runJobMicrolocation) {
+            if (!PropertiesSynPop.get().main.runJobAllocation) {
+                throw new IllegalStateException(
+                        "run.job.microlocation=true requires run.job.allocation=true.");
+            }
+            logger.info("Running Module: Job microlocation");
+            new GenerateJobMicrolocation(dataContainer).run();
+        }
 
         if (PropertiesSynPop.get().main.runAllocation) {
             writePopulation(dataContainer);
@@ -181,6 +193,14 @@ public class SyntheticPopDe implements SyntheticPopI {
                 + properties.realEstate.dwellingsFileName + suffix;
         DwellingWriter dwellingWriter = new DwellingWriterBerlinBrandenburg(dataContainer);
         dwellingWriter.writeDwellings(dwellingFile);
+
+        if (PropertiesSynPop.get().main.runJobAllocation) {
+            String jobFile = properties.main.baseDirectory
+                    + properties.jobData.jobsFileName + suffix;
+            JobWriter jobWriter = new JobWriterBerlinBrandenburg(
+                    dataContainer.getJobDataManager());
+            jobWriter.writeJobs(jobFile);
+        }
     }
 
     private void createDirectoryForOutput() {

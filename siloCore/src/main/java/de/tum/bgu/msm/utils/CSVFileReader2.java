@@ -194,6 +194,9 @@ public class CSVFileReader2 extends TableDataFileReader2 implements DataTypes {
 
             for(int i = 0; i < count; ++i) {
                 String column_name = tokens[i];
+                if (i == 0 && column_name.startsWith("\uFEFF")) {
+                    column_name = column_name.substring(1);
+                }
                 if(columnsToRead != null) {
                     for(int j = 0; j < columnsToRead.length; ++j) {
                         if(columnsToRead[j].equalsIgnoreCase(column_name)) {

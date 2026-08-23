@@ -7,13 +7,14 @@ import de.tum.bgu.msm.data.job.JobDataManager;
 import de.tum.bgu.msm.data.person.Gender;
 import de.tum.bgu.msm.data.person.Occupation;
 import de.tum.bgu.msm.data.person.Person;
-import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.CoefficientsReader;
-import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
+import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.CoefficientsReader;
+import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.DataSetSynPop;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
 import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -143,12 +144,9 @@ public class AssignPropertiesToJobs {
 
         Map<String, Double> durationDistribution = coefficientsDuration.get(durationType);
 
-        if (durationDistribution == null) {
-            setNoJobProperties(pp);
-            return;
-        }
-
-        String durationInMinutes = SiloUtil.select(durationDistribution);
+        String durationInMinutes = durationDistribution == null
+                ? ("partTime".equals(durationType) ? "240" : "480")
+                : SiloUtil.select(durationDistribution);
 
         pp.setAttribute("jobDuration", durationInMinutes);
 
@@ -170,14 +168,15 @@ public class AssignPropertiesToJobs {
         Map<String, Double> startTimeWeekendDistribution =
                 coefficientsStartTimeWeekend.get(durationKey);
 
+        String startTimeWorkdayInMinutes;
+        String startTimeWeekendInMinutes;
         if (startTimeWorkdayDistribution == null || startTimeWeekendDistribution == null) {
-            pp.setAttribute("jobStartTimeWorkday", "480");
-            pp.setAttribute("jobStartTimeWeekend", "0");
-            return;
+            startTimeWorkdayInMinutes = "480";
+            startTimeWeekendInMinutes = "0";
+        } else {
+            startTimeWorkdayInMinutes = SiloUtil.select(startTimeWorkdayDistribution);
+            startTimeWeekendInMinutes = SiloUtil.select(startTimeWeekendDistribution);
         }
-
-        String startTimeWorkdayInMinutes = SiloUtil.select(startTimeWorkdayDistribution);
-        String startTimeWeekendInMinutes = SiloUtil.select(startTimeWeekendDistribution);
 
         pp.setAttribute("jobStartTimeWorkday", startTimeWorkdayInMinutes);
         pp.setAttribute("jobStartTimeWeekend", startTimeWeekendInMinutes);
@@ -205,28 +204,55 @@ public class AssignPropertiesToJobs {
         coefficientsStartTimeWeekend = new HashMap<>();
         coefficientsStartTimeWorkday = new HashMap<>();
 
+        Path fullTimePath = Path.of(PropertiesSynPop.get().main.fullTimeFileName);
+        Path durationPath = Path.of(PropertiesSynPop.get().main.durationFileName);
+        Path startTimePath = Path.of(PropertiesSynPop.get().main.startTimeFileName);
+
+        if (!Files.isRegularFile(fullTimePath)
+                || !Files.isRegularFile(durationPath)
+                || !Files.isRegularFile(startTimePath)) {
+            logger.warn("Job-property coefficient files are incomplete. " +
+                    "Using defaults: full-time, 480-minute duration, 08:00 weekday start, " +
+                    "and no weekend start. Missing files: " +
+                    missingCoefficientFiles(fullTimePath, durationPath, startTimePath));
+            return;
+        }
+
         for (String jobType : PropertiesSynPop.get().main.jobStringType) {
             Map<String, Double> coefficientsByJobType =
                     new CoefficientsReader(dataSetSynPop, jobType,
-                            Path.of(PropertiesSynPop.get().main.fullTimeFileName)).readCoefficients();
+                            fullTimePath).readCoefficients();
             coefficientsFullTime.putIfAbsent(jobType, coefficientsByJobType);
         }
         coefficientsDuration.putIfAbsent("fullTime", new CoefficientsReader(dataSetSynPop, "duration_workFullTime",
-                Path.of(PropertiesSynPop.get().main.durationFileName)).readCoefficients());
+                durationPath).readCoefficients());
 
         coefficientsDuration.put("partTime", new CoefficientsReader(dataSetSynPop, "duration_workHalfTime",
-                Path.of(PropertiesSynPop.get().main.durationFileName)).readCoefficients());
+                durationPath).readCoefficients());
 
         String[] durationSegments = {"0_3","4_6","7_10","11+"};
         for (String duration : durationSegments){
             String durationWorkday = "work_wkday_duration_" + duration;
             coefficientsStartTimeWorkday.putIfAbsent(duration, new CoefficientsReader(dataSetSynPop, durationWorkday,
-                    Path.of(PropertiesSynPop.get().main.startTimeFileName)).readCoefficients());
+                    startTimePath).readCoefficients());
 
             String durationWeekend = "work_wkend_duration_" + duration;
             coefficientsStartTimeWeekend.putIfAbsent(duration, new CoefficientsReader(dataSetSynPop, durationWeekend,
-                    Path.of(PropertiesSynPop.get().main.startTimeFileName)).readCoefficients());
+                    startTimePath).readCoefficients());
         }
+    }
+
+    private String missingCoefficientFiles(Path... paths) {
+        StringBuilder missing = new StringBuilder();
+        for (Path path : paths) {
+            if (!Files.isRegularFile(path)) {
+                if (!missing.isEmpty()) {
+                    missing.append(", ");
+                }
+                missing.append(path);
+            }
+        }
+        return missing.toString();
     }
 
     private String getWorkerCategory(Person person) {

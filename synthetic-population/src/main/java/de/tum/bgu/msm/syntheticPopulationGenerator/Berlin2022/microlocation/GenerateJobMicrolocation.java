@@ -5,7 +5,6 @@ import de.tum.bgu.msm.data.Zone;
 import de.tum.bgu.msm.data.job.Job;
 //import de.tum.bgu.msm.data.job.JobImpl;
 //import de.tum.bgu.msm.data.job.JobMuc;
-import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
 import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;
@@ -21,7 +20,6 @@ public class GenerateJobMicrolocation {
     private static final Logger logger = LogManager.getLogger(GenerateJobMicrolocation.class);
     
     private final DataContainer dataContainer;
-    private final DataSetSynPop dataSetSynPop;
     private Map<Integer, Float> jobX = new HashMap<>();
     private Map<Integer, Float> jobY = new HashMap<>();
     Map<Integer, Integer> jobZone = new HashMap<Integer, Integer>();
@@ -29,14 +27,17 @@ public class GenerateJobMicrolocation {
     Map<Integer, Map<String,Float>> zoneJobTypeDensity = new HashMap<>();
     Map<Integer, Map<String,Integer>> jobsByJobTypeInTAZ = new HashMap<>();
     
-    public GenerateJobMicrolocation(DataContainer dataContainer, DataSetSynPop dataSetSynPop){
-        this.dataSetSynPop = dataSetSynPop;
+    public GenerateJobMicrolocation(DataContainer dataContainer){
         this.dataContainer = dataContainer;
     }
 
     public void run() {
 
         logger.info("   Running module: job microlocation");
+        if (PropertiesSynPop.get().main.jobLocationlist == null) {
+            throw new IllegalStateException(
+                    "Job microlocation is enabled, but jobLocation.list was not loaded.");
+        }
         logger.info("   Start parsing jobs information to hashmap");
 
         readJobFile();
@@ -218,7 +219,7 @@ public class GenerateJobMicrolocation {
 
     private void readJobFile() {
 
-        for (int zone : dataSetSynPop.getTazs()){
+        for (int zone : dataContainer.getGeoData().getZones().keySet()){
             Map<String,Map<Integer,Float>> jobLocationListForThisJobType = new HashMap<>();
             for (String jobType : PropertiesSynPop.get().main.jobStringType){
                 Map<Integer,Float> jobLocationAndArea = new HashMap<>();
@@ -286,7 +287,7 @@ public class GenerateJobMicrolocation {
 
     private void calculateDensity() {
 
-        for (int zone : dataSetSynPop.getTazs()) {
+        for (int zone : dataContainer.getGeoData().getZones().keySet()) {
 
             Map<String, Integer> jobsByJobType = new HashMap<>();
             Map<String, Float> densityByJobType = new HashMap<>();

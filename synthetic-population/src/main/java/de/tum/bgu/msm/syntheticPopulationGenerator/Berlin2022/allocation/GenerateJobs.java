@@ -3,13 +3,13 @@ package de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.allocation;
 import de.tum.bgu.msm.common.datafile.TableDataSet;
 import de.tum.bgu.msm.container.DataContainer;
 import de.tum.bgu.msm.data.job.JobDataManager;
-import de.tum.bgu.msm.data.job.JobUtils;
-import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
+import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.DataSetSynPop;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -99,7 +99,7 @@ public class GenerateJobs {
                             jobData.getNextJobId();
 
                     jobData.addJob(
-                            JobUtils
+                            jobData
                                     .getFactory()
                                     .createJob(
                                             id,
@@ -165,7 +165,8 @@ public class GenerateJobs {
             int row,
             String jobType
     ) {
-        if (!hasColumn(zoneAttributes, jobType)) {
+        String jobColumn = findJobColumn(zoneAttributes, jobType);
+        if (jobColumn == null) {
             throw new RuntimeException(
                     "Missing job column in zoneAttributes: " +
                             jobType +
@@ -178,7 +179,7 @@ public class GenerateJobs {
                 Math.round(
                         zoneAttributes.getValueAt(
                                 row,
-                                jobType
+                                jobColumn
                         )
                 )
         );
@@ -193,13 +194,14 @@ public class GenerateJobs {
         return PropertiesSynPop.get().main.cellsMatrix;
     }
 
-    private boolean hasColumn(TableDataSet table, String columnName) {
-
-        try {
-            table.getColumnPosition(columnName);
-            return true;
-        } catch (Exception e) {
-            return false;
+    private String findJobColumn(TableDataSet table, String jobType) {
+        List<String> columns = Arrays.asList(table.getColumnLabels());
+        if (columns.contains(jobType)) {
+            return jobType;
         }
+        if ("Serv".equals(jobType) && columns.contains("Service")) {
+            return "Service";
+        }
+        return null;
     }
 }

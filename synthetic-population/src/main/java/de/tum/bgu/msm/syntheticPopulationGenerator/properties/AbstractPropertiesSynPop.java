@@ -69,6 +69,7 @@ public abstract class AbstractPropertiesSynPop {
     public TableDataSet jobLocationlist;
     public TableDataSet schoolLocationlist;
     public boolean runMicrolocation;
+    public boolean runJobMicrolocation;
     public TableDataSet zonalDataIPU;
     public String state;
     public String pathSyntheticPopulationFiles;

@@ -46,7 +46,7 @@ public class Microlocation extends ModuleSynPop {
 
 
     private void generateJobMicrolocation() {
-        new GenerateJobMicrolocation(dataContainer, dataSetSynPop).run();
+        new GenerateJobMicrolocation(dataContainer).run();
 
     }
 
