@@ -48,7 +48,13 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
         runAllocation = PropertiesUtil.getBooleanProperty(bundle, "run.population.allocation", false);
         runMicrolocation = PropertiesUtil.getBooleanProperty(bundle, "run.sp.microlocation", true);
         runJobMicrolocation = PropertiesUtil.getBooleanProperty(bundle, "run.job.microlocation", false);
+        runSchoolMicrolocation = PropertiesUtil.getBooleanProperty(bundle, "run.school.microlocation", false);
         runJobAllocation = PropertiesUtil.getBooleanProperty(bundle, "run.job.allocation", true);
+        runSchoolAllocation = PropertiesUtil.getBooleanProperty(
+                bundle,
+                "run.school.allocation",
+                runSchoolMicrolocation
+        );
         runDisability = PropertiesUtil.getBooleanProperty(bundle, "run.disability", false);
 
         twoGeographicalAreasIPU = PropertiesUtil.getBooleanProperty(bundle, "run.ipu.city.and.county", false);
@@ -80,7 +86,8 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
         selectedMunicipalities = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle,"municipalities.list","input/syntheticPopulation/input2022/municipalitiesList.csv"));
         selectedMunicipalities.buildIndex(selectedMunicipalities.getColumnPosition("ID_city"));
 
-        if (runAllocation || runMicrolocation || runJobMicrolocation) {
+        if (runAllocation || runMicrolocation || runJobMicrolocation ||
+                runSchoolAllocation || runSchoolMicrolocation) {
             cellsMatrix = GeoDataReaderBerlinBrandenburg.readZoneTable(PropertiesUtil.getStringProperty(
                     bundle,
                     "taz.definition",
@@ -133,13 +140,19 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
 
         if (runMicrolocation) {
             buildingLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "buildingLocation.list", "input/syntheticPopulation/buildingLocation_2022.csv"));
-            schoolLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "schoolLocation.list", "input/syntheticPopulation/schoolLocation_2022_crs31468.csv"));
         }
         if (runJobMicrolocation) {
             jobLocationlist = readJobLocationList(PropertiesUtil.getStringProperty(
                     bundle,
                     "jobLocation.list",
                     "input/syntheticPopulation/jobLocation_5types.csv"
+            ));
+        }
+        if (runSchoolMicrolocation) {
+            schoolLocationlist = readSchoolLocationList(PropertiesUtil.getStringProperty(
+                    bundle,
+                    "schoolLocation.list",
+                    "input/syntheticPopulation/schoolLocation_2022_crs31468.csv"
             ));
         }
 
@@ -170,6 +183,18 @@ public class Berlin2022PropertiesSynPop extends AbstractPropertiesSynPop {
             return new CSVFileReader2().readFileWithFormats(new File(fileName), columnFormats);
         } catch (IOException | RuntimeException e) {
             throw new RuntimeException("Error reading Berlin job-location file " + fileName, e);
+        }
+    }
+
+    private TableDataSet readSchoolLocationList(String fileName) {
+        String[] columnFormats = {
+                "NUMBER", "NUMBER", "NUMBER", "NUMBER", "NUMBER", "NUMBER"
+        };
+
+        try {
+            return new CSVFileReader2().readFileWithFormats(new File(fileName), columnFormats);
+        } catch (IOException | RuntimeException e) {
+            throw new RuntimeException("Error reading Berlin school-location file " + fileName, e);
         }
     }
 

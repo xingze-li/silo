@@ -67,10 +67,15 @@ public class ReadZonalData {
 
     public void run() {
         readCities();
-        if (PropertiesSynPop.get().main.runAllocation || PropertiesSynPop.get().main.runMicrolocation) {
+        if (PropertiesSynPop.get().main.runAllocation ||
+                PropertiesSynPop.get().main.runMicrolocation ||
+                PropertiesSynPop.get().main.runJobMicrolocation ||
+                PropertiesSynPop.get().main.runSchoolAllocation ||
+                PropertiesSynPop.get().main.runSchoolMicrolocation) {
             readZones();
         }
-        if (PropertiesSynPop.get().main.runJobAllocation) {
+        if (PropertiesSynPop.get().main.runJobAllocation ||
+                PropertiesSynPop.get().main.runSchoolAllocation) {
             readDistanceMatrix();
             readTripLengthFrequencyDistribution();
         }

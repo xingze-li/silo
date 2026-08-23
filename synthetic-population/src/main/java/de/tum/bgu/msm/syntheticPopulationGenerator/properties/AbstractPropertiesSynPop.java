@@ -9,6 +9,7 @@ public abstract class AbstractPropertiesSynPop {
     public boolean runIPU;
     public boolean runAllocation;
     public boolean runJobAllocation;
+    public boolean runSchoolAllocation;
     public boolean twoGeographicalAreasIPU;
     public boolean runDisability;
     public String[] attributesMunicipality;
@@ -70,6 +71,7 @@ public abstract class AbstractPropertiesSynPop {
     public TableDataSet schoolLocationlist;
     public boolean runMicrolocation;
     public boolean runJobMicrolocation;
+    public boolean runSchoolMicrolocation;
     public TableDataSet zonalDataIPU;
     public String state;
     public String pathSyntheticPopulationFiles;

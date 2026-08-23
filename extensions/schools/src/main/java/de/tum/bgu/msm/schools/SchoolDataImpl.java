@@ -91,16 +91,35 @@ public class SchoolDataImpl implements SchoolData {
 
 
     private Envelope loadEnvelope() {
-        //TODO: Remove minX,minY,maxX,maxY when implementing study area shapefile in Geodata 09 Oct QZ'
         File schoolsShapeFile = new File(properties.main.baseDirectory + properties.schoolData.schoolsShapeFile);
 
-        try {
-            FileDataStore dataStore = FileDataStoreFinder.getDataStore(schoolsShapeFile);
-            return dataStore.getFeatureSource().getBounds();
-        } catch (IOException e) {
-            logger.error("Error reading file " + schoolsShapeFile);
-            throw new RuntimeException(e);
+        if (schoolsShapeFile.exists()) {
+            try {
+                FileDataStore dataStore = FileDataStoreFinder.getDataStore(schoolsShapeFile);
+                if (dataStore != null) {
+                    return dataStore.getFeatureSource().getBounds();
+                }
+            } catch (IOException e) {
+                logger.warn("Could not read school shapefile " + schoolsShapeFile +
+                        ". Falling back to school CSV coordinates.", e);
+            }
+        } else {
+            logger.warn("School shapefile not found: " + schoolsShapeFile +
+                    ". Using school CSV coordinates to initialize the spatial index.");
         }
+
+        Envelope envelope = new Envelope();
+        for (School school : schools.values()) {
+            Coordinate coordinate = ((MicroLocation) school).getCoordinate();
+            if (coordinate != null) {
+                envelope.expandToInclude(coordinate);
+            }
+        }
+        if (envelope.isNull()) {
+            throw new IllegalStateException(
+                    "Cannot initialize the school spatial index because no school coordinates are available.");
+        }
+        return envelope;
     }
 
     @Override

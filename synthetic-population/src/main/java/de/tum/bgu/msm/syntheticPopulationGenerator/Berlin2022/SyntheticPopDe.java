@@ -42,9 +42,11 @@ import de.tum.bgu.msm.schools.DataContainerWithSchools;
 import de.tum.bgu.msm.schools.DataContainerWithSchoolsImpl;
 import de.tum.bgu.msm.schools.SchoolData;
 import de.tum.bgu.msm.schools.SchoolDataImpl;
+import de.tum.bgu.msm.schools.SchoolsWriter;
 import de.tum.bgu.msm.syntheticPopulationGenerator.SyntheticPopI;
 import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.allocation.Allocation;
 import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.microlocation.GenerateJobMicrolocation;
+import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.microlocation.GenerateSchoolMicrolocation;
 import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.optimization.Optimization;
 import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.preparation.Preparation;
 import de.tum.bgu.msm.syntheticPopulationGenerator.properties.PropertiesSynPop;
@@ -97,6 +99,15 @@ public class SyntheticPopDe implements SyntheticPopI {
             }
             logger.info("Running Module: Job microlocation");
             new GenerateJobMicrolocation(dataContainer).run();
+        }
+
+        if (PropertiesSynPop.get().main.runSchoolMicrolocation) {
+            if (!PropertiesSynPop.get().main.runSchoolAllocation) {
+                throw new IllegalStateException(
+                        "run.school.microlocation=true requires run.school.allocation=true.");
+            }
+            logger.info("Running Module: School microlocation");
+            new GenerateSchoolMicrolocation(dataContainer).run();
         }
 
         if (PropertiesSynPop.get().main.runAllocation) {
@@ -200,6 +211,13 @@ public class SyntheticPopDe implements SyntheticPopI {
             JobWriter jobWriter = new JobWriterBerlinBrandenburg(
                     dataContainer.getJobDataManager());
             jobWriter.writeJobs(jobFile);
+        }
+
+        if (PropertiesSynPop.get().main.runSchoolMicrolocation) {
+            String schoolFile = properties.main.baseDirectory
+                    + properties.schoolData.schoolsFileName + suffix;
+            SchoolsWriter schoolsWriter = new SchoolsWriter(dataContainer.getSchoolData());
+            schoolsWriter.writeSchools(schoolFile);
         }
     }
 

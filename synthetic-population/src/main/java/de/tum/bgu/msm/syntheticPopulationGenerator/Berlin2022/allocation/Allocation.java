@@ -45,6 +45,15 @@ public class Allocation extends ModuleSynPop{
         } else {
             logger.info("   Job allocation is disabled by run.job.allocation=false.");
         }
+        if (PropertiesSynPop.get().main.runSchoolAllocation) {
+            if (!PropertiesSynPop.get().main.runAllocation) {
+                throw new IllegalStateException(
+                        "Berlin 2022 school allocation requires run.population.allocation=true.");
+            }
+            assignSchools();
+        } else {
+            logger.info("   School allocation is disabled by run.school.allocation=false.");
+        }
         logger.info("   Completed allocation model.");
 
     }
@@ -74,6 +83,10 @@ public class Allocation extends ModuleSynPop{
 
     private void assignJobProperties() {
         new AssignPropertiesToJobs(dataContainer, dataSetSynPop).run();
+    }
+
+    private void assignSchools() {
+        new AssignSchools(dataContainer, dataSetSynPop).run();
     }
 
     public void addBoroughsAsCities(int county){

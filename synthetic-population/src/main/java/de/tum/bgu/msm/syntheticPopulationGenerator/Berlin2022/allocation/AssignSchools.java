@@ -7,8 +7,8 @@ import de.tum.bgu.msm.data.household.Household;
 import de.tum.bgu.msm.data.person.Gender;
 import de.tum.bgu.msm.data.person.Occupation;
 import de.tum.bgu.msm.data.person.Person;
-import de.tum.bgu.msm.data.person.PersonMuc;
-import de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.DataSetSynPop;
+import de.tum.bgu.msm.schools.PersonWithSchool;
+import de.tum.bgu.msm.syntheticPopulationGenerator.Berlin2022.DataSetSynPop;
 import de.tum.bgu.msm.utils.SiloUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -22,7 +22,7 @@ public class AssignSchools {
     private final DataSetSynPop dataSetSynPop;
     private final DataContainer dataContainer;
 
-    private ArrayList<Person> studentArrayList;
+    private ArrayList<PersonWithSchool> studentArrayList;
     private int assignedStudents;
     private final Set<String> printedSchoolWeightSamples =
             new HashSet<>();
@@ -62,8 +62,7 @@ public class AssignSchools {
         double logging = 2;
         int it = 12;
         RealEstateDataManager realEstate = dataContainer.getRealEstateDataManager();
-        for (Person p : studentArrayList){
-            PersonMuc pp = ((PersonMuc)p);
+        for (PersonWithSchool pp : studentArrayList){
             int schooltaz;
             Household household = pp.getHousehold();
             int hometaz = realEstate.getDwelling(household.getDwellingId()).getZoneId();
@@ -603,13 +602,17 @@ public class AssignSchools {
 
         studentArrayList = new ArrayList<>();
         for (Person p : dataContainer.getHouseholdDataManager().getPersons()){
-            PersonMuc pp = (PersonMuc) p;
-            if (pp.getOccupation() == Occupation.STUDENT){
-                studentArrayList.add(pp);
-                pp.setSchoolPlace(-1);
+            if (p.getOccupation() == Occupation.STUDENT) {
+                if (!(p instanceof PersonWithSchool)) {
+                    throw new IllegalStateException(
+                            "Student " + p.getId() + " does not implement PersonWithSchool.");
+                }
+                PersonWithSchool student = (PersonWithSchool) p;
+                studentArrayList.add(student);
+                student.setSchoolPlace(-1);
             }
         }
-        Collections.shuffle(studentArrayList);
+        Collections.shuffle(studentArrayList, SiloUtil.getRandomObject());
         assignedStudents = 0;
     }
 
