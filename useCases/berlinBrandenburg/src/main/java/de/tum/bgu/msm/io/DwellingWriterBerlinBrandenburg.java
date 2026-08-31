@@ -24,7 +24,7 @@ public class DwellingWriterBerlinBrandenburg implements DwellingWriter {
     public void writeDwellings(String path) {
         logger.info("  Writing dwelling file to " + path);
         PrintWriter pwd = SiloUtil.openFileForSequentialWriting(path, false);
-        pwd.print("id,zone,municipality,type,hhID,bedrooms,quality,monthlyCost,yearBuilt");
+        pwd.print("id,zone,municipality,type,hhId,bedrooms,quality,monthlyCost,yearBuilt");
         pwd.print(",");
         pwd.print("floor");
         pwd.print(",");
