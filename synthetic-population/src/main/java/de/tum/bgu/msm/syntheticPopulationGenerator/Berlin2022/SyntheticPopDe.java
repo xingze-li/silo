@@ -30,7 +30,7 @@ import de.tum.bgu.msm.io.DwellingWriterBerlinBrandenburg;
 import de.tum.bgu.msm.io.GeoDataReaderBerlinBrandenburg;
 import de.tum.bgu.msm.io.HouseholdWriterBerlinBrandenburgDisability;
 import de.tum.bgu.msm.io.JobWriterBerlinBrandenburg;
-import de.tum.bgu.msm.io.PersonWriterBerlinBrandenburg;
+import de.tum.bgu.msm.io.PersonWriterBerlinBrandenburgDisability;
 import de.tum.bgu.msm.io.input.GeoDataReader;
 import de.tum.bgu.msm.io.output.DwellingWriter;
 import de.tum.bgu.msm.io.output.HouseholdWriter;
@@ -196,7 +196,7 @@ public class SyntheticPopDe implements SyntheticPopI {
 
         String personFile = properties.main.baseDirectory
                 + properties.householdData.personFileName + suffix;
-        PersonWriter personWriter = new PersonWriterBerlinBrandenburg(
+        PersonWriter personWriter = new PersonWriterBerlinBrandenburgDisability(
                 dataContainer.getHouseholdDataManager());
         personWriter.writePersons(personFile);
 

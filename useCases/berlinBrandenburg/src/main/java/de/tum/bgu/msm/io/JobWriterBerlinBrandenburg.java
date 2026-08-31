@@ -24,7 +24,7 @@ public class JobWriterBerlinBrandenburg implements JobWriter {
     public void writeJobs(String path) {
         logger.info("  Writing job file to " + path);
         PrintWriter pwj = SiloUtil.openFileForSequentialWriting(path, false);
-        pwj.print("id,zone,personId,type");
+        pwj.print("id,zone,municipality,personId,type");
         pwj.print(",");
         pwj.print("coordX");
         pwj.print(",");
@@ -38,6 +38,8 @@ public class JobWriterBerlinBrandenburg implements JobWriter {
             pwj.print(jj.getId());
             pwj.print(",");
             pwj.print(jj.getZoneId());
+            pwj.print(",");
+            pwj.print(getJobAttributeOrDefault(jj, "municipality", -1));
             pwj.print(",");
             pwj.print(jj.getWorkerId());
             pwj.print(",\"");
