@@ -660,27 +660,33 @@ public class MicroDataManager {
          * 011 becomes 11.
          */
 
+        // A: Agriculture
         if (wz08Code >= 11 && wz08Code <= 32) {
             return "Agri";
         }
 
-        if ((wz08Code >= 51 && wz08Code <= 99)
-                || (wz08Code >= 101 && wz08Code <= 439)) {
+        // B-F: Industry, manufacturing, utilities, construction
+        if ((wz08Code >= 51 && wz08Code <= 99) ||
+                (wz08Code >= 101 && wz08Code <= 439)) {
             return "Manu";
         }
 
+        // G-I: Trade, transport, accommodation, food services
         if (wz08Code >= 451 && wz08Code <= 563) {
             return "Retail";
         }
 
+        // J-N: Information, finance, real estate, business services
         if (wz08Code >= 581 && wz08Code <= 829) {
             return "Business";
         }
 
+        // O-U: Public administration and other services
         if (wz08Code >= 841 && wz08Code <= 990) {
             return "Serv";
         }
 
+        // Missing, invalid, or unclassified codes
         return "";
     }
 }
