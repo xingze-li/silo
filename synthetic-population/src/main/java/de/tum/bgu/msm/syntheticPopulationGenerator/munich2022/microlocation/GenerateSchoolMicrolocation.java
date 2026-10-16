@@ -1,6 +1,5 @@
 package de.tum.bgu.msm.syntheticPopulationGenerator.munich2022.microlocation;
 
-import de.tum.bgu.msm.data.Zone;
 import de.tum.bgu.msm.data.person.Occupation;
 import de.tum.bgu.msm.data.person.Person;
 import de.tum.bgu.msm.data.person.PersonMuc;
@@ -15,7 +14,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.locationtech.jts.geom.Coordinate;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class GenerateSchoolMicrolocation {
@@ -59,8 +60,8 @@ public class GenerateSchoolMicrolocation {
         initializeMunicipalityLookup();
         createSchools();
         logger.info("   Start Selecting the school to allocate the student");
-        //Select the school to allocate the student
-        int errorSchool = 0;
+        // First pass: preserve capacity-based allocation within the assigned school zone.
+        List<PersonMuc> unassignedStudents = new ArrayList<>();
         for (Person p : dataContainer.getHouseholdDataManager().getPersons()) {
             PersonMuc pp = (PersonMuc) p;
             if (pp.getOccupation() == Occupation.STUDENT) {
@@ -69,32 +70,40 @@ public class GenerateSchoolMicrolocation {
 
                 if (zoneSchoolTypeSchoolLocationCapacity.get(zoneID) == null ||
                         zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType) == null ||
-                zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType).isEmpty() ||
+                        zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType).isEmpty() ||
                         SiloUtil.getSum(zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType).values()) == 0) {
-                	School school = dataContainer.getSchoolData().getClosestSchool(pp,pp.getSchoolType());
-                    pp.setSchoolId(school.getId());
-                	errorSchool++;
+                    unassignedStudents.add(pp);
                     continue;
                 }
-                int selectedSchoolID;
-                try {
-                    selectedSchoolID = SiloUtil.select(zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType));
-                    School school = dataContainer.getSchoolData().getSchoolFromId(selectedSchoolID);
-                    int remainingCapacity = zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType).get(selectedSchoolID) - 1;
-                    zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType).put(selectedSchoolID, remainingCapacity);
-                    pp.setSchoolId(school.getId());
-                } catch (Exception e) {
-                    System.out.println("jo");
-                }
+                int selectedSchoolID = SiloUtil.select(zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType));
+                School school = dataContainer.getSchoolData().getSchoolFromId(selectedSchoolID);
+                int remainingCapacity = zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType).get(selectedSchoolID) - 1;
+                zoneSchoolTypeSchoolLocationCapacity.get(zoneID).get(schoolType).put(selectedSchoolID, remainingCapacity);
+                pp.setSchoolId(school.getId());
+                pp.setSchoolPlace(school.getZoneId());
             }
         }
 
-        for (School ss : dataContainer.getSchoolData().getSchools()){
-            int finalRemainingCapacity = zoneSchoolTypeSchoolLocationCapacity.get(ss.getZoneId()).get(ss.getType()).get(ss.getId());
-            ss.setOccupancy(ss.getCapacity()-finalRemainingCapacity);
+        // Second pass: use the nearest school of the same type, regardless of capacity.
+        for (PersonMuc student : unassignedStudents) {
+            School school = dataContainer.getSchoolData().getClosestSchool(student, student.getSchoolType());
+            student.setSchoolId(school.getId());
+            student.setSchoolPlace(school.getZoneId());
         }
 
-        logger.warn( errorSchool +"   Students cannot find specific school location. Their coordinates are assigned randomly in TAZ" );
+        // Count actual assignments, including students admitted beyond the original capacity.
+        Map<Integer, Integer> studentsBySchool = new HashMap<>();
+        for (Person person : dataContainer.getHouseholdDataManager().getPersons()) {
+            if (person.getOccupation() == Occupation.STUDENT) {
+                studentsBySchool.merge(((PersonMuc) person).getSchoolId(), 1, Integer::sum);
+            }
+        }
+        for (School school : dataContainer.getSchoolData().getSchools()) {
+            school.setOccupancy(studentsBySchool.getOrDefault(school.getId(), 0));
+        }
+
+        logger.info("   " + unassignedStudents.size()
+                + " students assigned to the nearest school of the same type without capacity constraints in the second pass.");
         logger.info("   Finished school microlocation.");
     }
 
