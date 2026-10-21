@@ -105,6 +105,11 @@ public class Munich2022PropertiesSynPop extends AbstractPropertiesSynPop {
         errorsSummaryFileName = PropertiesUtil.getStringProperty(bundle, "errors.IPU.summary.matrix", "microData/interimFiles/errorsIPUsummary.csv");
         //todo do not need to ride always?
         if (runMicrolocation) {
+            spatialTargetCrs = PropertiesUtil.getStringProperty(bundle, "spatial.target.crs", "EPSG:31468");
+            buildingInputCrs = PropertiesUtil.getStringProperty(bundle, "building.input.crs", "EPSG:25832");
+            schoolInputCrs = PropertiesUtil.getStringProperty(bundle, "school.input.crs", "EPSG:31468");
+            jobInputCrs = PropertiesUtil.getStringProperty(bundle, "job.input.crs", "EPSG:31468");
+            zoneInputCrs = PropertiesUtil.getStringProperty(bundle, "zone.input.crs", "EPSG:31468");
             buildingLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "buildingLocation.list", "input/syntheticPopulation/buildingLocation_2022.csv"));
             jobLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "jobLocation.list", "input/syntheticPopulation/jobLocation_5types.csv"));
             schoolLocationlist = SiloUtil.readCSVfile(PropertiesUtil.getStringProperty(bundle, "schoolLocation.list", "input/syntheticPopulation/schoolLocation_2022_crs31468.csv"));

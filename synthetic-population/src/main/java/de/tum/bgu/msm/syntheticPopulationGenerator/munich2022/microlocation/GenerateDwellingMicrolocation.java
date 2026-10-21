@@ -20,8 +20,8 @@ public class GenerateDwellingMicrolocation {
     private static final double PENALTY = 0.5;
     private final DataContainer dataContainer;
     private final DataSetSynPop dataSetSynPop;
-    private HashMap<Integer, Float> buildingX = new HashMap<>();
-    private HashMap<Integer, Float> buildingY = new HashMap<>();
+    private HashMap<Integer, Double> buildingX = new HashMap<>();
+    private HashMap<Integer, Double> buildingY = new HashMap<>();
     private HashMap<Integer, HashMap<Integer,Double>> zoneBuildingMap = new HashMap<>();
     Map<Integer, Integer> buildingZone = new HashMap<Integer, Integer>();
     Map<Integer, Double> buildingArea = new HashMap<>();
@@ -65,6 +65,8 @@ public class GenerateDwellingMicrolocation {
 
 
     private void readBuidlingFile() {
+        InputCoordinateTransform transform = new InputCoordinateTransform(
+                PropertiesSynPop.get().main.buildingInputCrs, PropertiesSynPop.get().main.spatialTargetCrs);
         //parse buildings information to hashmap
         for (int row = 1; row <= PropertiesSynPop.get().main.buildingLocationlist.getRowCount(); row++) {
             //parse building id, area, x and y coordinate
@@ -73,8 +75,9 @@ public class GenerateDwellingMicrolocation {
             double area = PropertiesSynPop.get().main.buildingLocationlist.getValueAt(row,"Area");
             float xCoordinate = PropertiesSynPop.get().main.buildingLocationlist.getValueAt(row,"X");
             float yCoordinate = PropertiesSynPop.get().main.buildingLocationlist.getValueAt(row,"Y");
-            buildingX.put(id,xCoordinate);
-            buildingY.put(id,yCoordinate);
+            Coordinate coordinate = transform.apply(xCoordinate, yCoordinate);
+            buildingX.put(id,coordinate.x);
+            buildingY.put(id,coordinate.y);
             buildingArea.put(id,area);
             buildingZone.put(id,zone);
             //put all buildings with the same zoneID into one building list

@@ -22,8 +22,8 @@ public class GenerateJobMicrolocation {
     
     private final DataContainer dataContainer;
     private final DataSetSynPop dataSetSynPop;
-    private Map<Integer, Float> jobX = new HashMap<>();
-    private Map<Integer, Float> jobY = new HashMap<>();
+    private Map<Integer, Double> jobX = new HashMap<>();
+    private Map<Integer, Double> jobY = new HashMap<>();
     Map<Integer, Integer> jobZone = new HashMap<Integer, Integer>();
     Map<Integer, Map<String,Map<Integer,Float>>> zoneJobTypeJobLocationArea = new HashMap<>();
     Map<Integer, Map<String,Float>> zoneJobTypeDensity = new HashMap<>();
@@ -217,6 +217,8 @@ public class GenerateJobMicrolocation {
 
 
     private void readJobFile() {
+        InputCoordinateTransform transform = new InputCoordinateTransform(
+                PropertiesSynPop.get().main.jobInputCrs, PropertiesSynPop.get().main.spatialTargetCrs);
 
         for (int zone : dataSetSynPop.getTazs()){
             Map<String,Map<Integer,Float>> jobLocationListForThisJobType = new HashMap<>();
@@ -253,8 +255,9 @@ public class GenerateJobMicrolocation {
                     PropertiesSynPop.get().main.jobLocationlist.getValueAt(row, "jobArea5")
             );
             jobZone.put(id,zone);
-            jobX.put(id,xCoordinate);
-            jobY.put(id,yCoordinate);
+            Coordinate coordinate = transform.apply(xCoordinate, yCoordinate);
+            jobX.put(id,coordinate.x);
+            jobY.put(id,coordinate.y);
 
 
             final Map<String, Map<Integer, Float>> stringMapMap = zoneJobTypeJobLocationArea.get(zone);

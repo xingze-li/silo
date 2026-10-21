@@ -29,6 +29,11 @@ public class Microlocation extends ModuleSynPop {
         String zoneShapeFile = Properties.get().geo.zoneShapeFile;
         Map<Integer, SimpleFeature> zoneFeatureMap = new HashMap<>();
         for (SimpleFeature feature: ShapeFileReader.getAllFeatures(zoneShapeFile)) {
+            if (zoneFeatureMap.isEmpty() && PropertiesSynPop.get().main.runMicrolocation) {
+                InputCoordinateTransform.validateZoneCrs(PropertiesSynPop.get().main.zoneInputCrs,
+                        PropertiesSynPop.get().main.spatialTargetCrs,
+                        feature.getFeatureType().getCoordinateReferenceSystem());
+            }
             int zoneId = Integer.parseInt(feature.getAttribute("TAZ_ID").toString());
             zoneFeatureMap.put(zoneId,feature);
         }

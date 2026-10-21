@@ -4,6 +4,11 @@ import de.tum.bgu.msm.common.datafile.TableDataSet;
 import org.apache.commons.math3.distribution.GammaDistribution;
 
 public abstract class AbstractPropertiesSynPop {
+    public String spatialTargetCrs;
+    public String buildingInputCrs;
+    public String schoolInputCrs;
+    public String jobInputCrs;
+    public String zoneInputCrs;
     public boolean runSyntheticPopulation;
     public String microDataFile;
     public boolean runIPU;

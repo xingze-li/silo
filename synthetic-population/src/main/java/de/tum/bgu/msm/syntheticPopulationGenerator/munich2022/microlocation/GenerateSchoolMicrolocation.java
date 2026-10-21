@@ -110,6 +110,8 @@ public class GenerateSchoolMicrolocation {
 
 
     private void createSchools() {
+        InputCoordinateTransform transform = new InputCoordinateTransform(
+                PropertiesSynPop.get().main.schoolInputCrs, PropertiesSynPop.get().main.spatialTargetCrs);
 
         for (int zone : dataSetSynPop.getTazs()){
             Map<Integer,Map<Integer,Integer>> schoolLocationListForThisSchoolType = new HashMap<>();
@@ -134,7 +136,7 @@ public class GenerateSchoolMicrolocation {
             );
             int schoolType = (int) PropertiesSynPop.get().main.schoolLocationlist.getValueAt(row,"schoolType");
 
-            Coordinate coordinate = new Coordinate(xCoordinate,yCoordinate);
+            Coordinate coordinate = transform.apply(xCoordinate,yCoordinate);
             schoolData.addSchool(SchoolUtils.getFactory().createSchool(id, schoolType, schoolCapacity,0,coordinate, zone, municipality));
 
             if (zoneSchoolTypeSchoolLocationCapacity.get(zone) != null){
