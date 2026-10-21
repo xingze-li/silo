@@ -34,6 +34,7 @@ public class PersonWriterMucDisability implements PersonWriter {
         pwp.print(",disability");
         pwp.print(",schoolType");
         pwp.print(",schoolPlace");
+        pwp.print(",schoolId");
         pwp.print(",jobType");
         pwp.print(",jobTypeWZ08");
         pwp.print(",jobDurationType");
@@ -109,6 +110,9 @@ public class PersonWriterMucDisability implements PersonWriter {
             pwp.print(",");
 
             pwp.print(getSchoolPlaceOrDefault(pp));
+            pwp.print(",");
+
+            pwp.print(getSchoolIdOrDefault(pp));
             pwp.print(",");
 
             pwp.print(getAttributeOrDefault(pp, "jobType", ""));
@@ -256,6 +260,19 @@ public class PersonWriterMucDisability implements PersonWriter {
         }
 
         return "0";
+    }
+
+    private String getSchoolIdOrDefault(Person pp) {
+
+        if (pp instanceof PersonMuc) {
+            return Integer.toString(((PersonMuc) pp).getSchoolId());
+        }
+
+        if (pp instanceof PersonMucDisability) {
+            return Integer.toString(((PersonMucDisability) pp).getSchoolId());
+        }
+
+        return "-1";
     }
 
     private String getSchoolPlaceOrDefault(Person pp) {
